@@ -1,0 +1,127 @@
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #6e8e6e 0%, #4f7a4f 100%);
+    padding: 20px;
+}
+
+.login-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.login-header h1 {
+    color: #2c3e50;
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.login-header p {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.login-form {
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.form-control:focus {
+    border-color: #4f7a4f;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(79, 122, 79, 0.2);
+}
+
+.input-hint {
+    color: #7f8c8d;
+    font-size: 0.75rem;
+    margin-top: 0.3rem;
+    display: block;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 0.8rem;
+    background-color: #4f7a4f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-top: 0.5rem;
+}
+
+.login-btn:hover:not(:disabled) {
+    background-color: #3d623d;
+}
+
+.login-btn:disabled {
+    background-color: #a0b9a0;
+    cursor: not-allowed;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.login-footer {
+    text-align: center;
+}
+
+.login-footer p {
+    color: #7f8c8d;
+    font-size: 0.8rem;
+}
+
+
+/* Responsive adjustments */
+
+@media (max-width: 480px) {
+    .login-card {
+        padding: 1.5rem;
+    }
+    .login-header h1 {
+        font-size: 1.5rem;
+    }
+    .form-control {
+        padding: 0.7rem 0.9rem;
+    }
+}
