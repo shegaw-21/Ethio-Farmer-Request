@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 // Constants
-const RANK = { Federal: 5, Region: 4, Zone: 3, Woreda: 2, Kebele: 1 };
+const RANK = { Federal: 5, Region: 4, Zone: 3, Woreda: 2, Kebele: 1, Farmer: 0 };
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
 
 // Helper Functions
@@ -35,10 +35,8 @@ const helpers = {
         if (creator.role === 'Kebele' && target.kebele_name !== creator.kebele_name) return false;
         return true;
     },
-
     roleIsLower: (creatorRole, targetRole) => {
-        if (targetRole === 'Farmer') return true;
-        return (RANK[targetRole] || 0) < (RANK[creatorRole] || 0);
+        return (RANK[targetRole] || -1) < (RANK[creatorRole] || 0);
     },
 
     ensureUniquePerScope: async({ role, region_name, zone_name, woreda_name, kebele_name }) => {
@@ -289,7 +287,7 @@ const adminManagement = {
 
             // Get admins
             const [admins] = await db.query(
-                `SELECT 'admin' AS type, id, full_name, phone_number, role,
+                `SELECT 'admin' AS type, id, full_name, phone_number, password_hash, role,
                 region_name, zone_name, woreda_name, kebele_name, created_at
          FROM admins
          WHERE ${where} AND (
@@ -307,11 +305,11 @@ const adminManagement = {
 
             // Get farmers
             const [farmers] = await db.query(
-                `SELECT 'farmer' AS type, id, full_name, phone_number, NULL AS role,
+                `SELECT 'farmer' AS type, id, full_name, phone_number, password_hash, NULL AS role,
                 region_name, zone_name, woreda_name, kebele_name, created_at
          FROM farmers
          WHERE ${where}
-         ORDER BY created_at DESC`,
+         ORDER by created_at DESC`,
                 params
             );
 
@@ -327,43 +325,79 @@ const adminManagement = {
             const { id } = req.params;
             const { fullName, phoneNumber, region_name, zone_name, woreda_name, kebele_name } = req.body;
 
-            // Get target admin
-            const [rows] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
-            if (!rows.length) return res.status(404).json({ message: 'Admin not found' });
-            const target = rows[0];
+            // Check if target is an admin or farmer
+            let isFarmer = false;
+            let target = null;
+
+            // First check if it's an admin
+            const [adminRows] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
+            if (adminRows.length) {
+                target = adminRows[0];
+            } else {
+                // If not admin, check if it's a farmer
+                const [farmerRows] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+                if (farmerRows.length) {
+                    target = farmerRows[0];
+                    isFarmer = true;
+                } else {
+                    return res.status(404).json({ message: 'Admin or farmer not found' });
+                }
+            }
 
             // Authorization checks
-            if (!helpers.roleIsLower(creator.role, target.role)) {
-                return res.status(403).json({ message: 'You can only edit lower-level admins' });
-            }
-            if (!helpers.scopeMatches(creator, target)) {
-                return res.status(403).json({ message: 'Target admin is outside your scope' });
+            if (isFarmer) {
+                // For farmers: Kebele admins can edit farmers in their scope, higher admins can edit any farmer
+                if (creator.role === 'Kebele') {
+                    if (!helpers.scopeMatches(creator, target)) {
+                        return res.status(403).json({ message: 'Farmer is outside your scope' });
+                    }
+                } else if (!['Federal', 'Region', 'Zone', 'Woreda'].includes(creator.role)) {
+                    return res.status(403).json({ message: 'Only Kebele admins or higher can edit farmers' });
+                }
+            } else {
+                // For admins: Use the original role-based authorization
+                const creatorRank = RANK[creator.role] || 0;
+                const targetRank = RANK[target.role] || 0;
+
+                if (targetRank >= creatorRank) {
+                    return res.status(403).json({ message: 'You can only edit lower-level admins' });
+                }
+                if (!helpers.scopeMatches(creator, target)) {
+                    return res.status(403).json({ message: 'Target admin is outside your scope' });
+                }
             }
 
             // Prepare update values
             const newVals = {
-                role: target.role,
+                role: isFarmer ? 'Farmer' : target.role,
                 region_name: region_name || target.region_name,
                 zone_name: zone_name || target.zone_name,
                 woreda_name: woreda_name || target.woreda_name,
                 kebele_name: kebele_name || target.kebele_name
             };
 
-            // Check uniqueness if location changed
-            if (region_name || zone_name || woreda_name || kebele_name) {
+            // Check uniqueness if location changed (only for admins, not farmers)
+            if (!isFarmer && (region_name || zone_name || woreda_name || kebele_name)) {
                 await helpers.ensureUniquePerScope(newVals);
             }
 
             // Check phone uniqueness if changed
             if (phoneNumber && phoneNumber !== target.phone_number) {
-                const [existsA] = await db.query('SELECT id FROM admins WHERE phone_number=? AND id<>? LIMIT 1', [phoneNumber, id]);
-                const [existsF] = await db.query('SELECT id FROM farmers WHERE phone_number=? LIMIT 1', [phoneNumber]);
-                if (existsA.length || existsF.length) return res.status(409).json({ message: 'Phone number already in use' });
+                if (isFarmer) {
+                    const [existsA] = await db.query('SELECT id FROM admins WHERE phone_number=? LIMIT 1', [phoneNumber]);
+                    const [existsF] = await db.query('SELECT id FROM farmers WHERE phone_number=? AND id<>? LIMIT 1', [phoneNumber, id]);
+                    if (existsA.length || existsF.length) return res.status(409).json({ message: 'Phone number already in use' });
+                } else {
+                    const [existsA] = await db.query('SELECT id FROM admins WHERE phone_number=? AND id<>? LIMIT 1', [phoneNumber, id]);
+                    const [existsF] = await db.query('SELECT id FROM farmers WHERE phone_number=? LIMIT 1', [phoneNumber]);
+                    if (existsA.length || existsF.length) return res.status(409).json({ message: 'Phone number already in use' });
+                }
             }
 
-            // Perform update
-            await db.query(
-                `UPDATE admins SET 
+            // Perform update based on whether it's an admin or farmer
+            if (isFarmer) {
+                await db.query(
+                    `UPDATE farmers SET 
           full_name = COALESCE(?, full_name),
           phone_number = COALESCE(?, phone_number),
           region_name = ?,
@@ -371,10 +405,25 @@ const adminManagement = {
           woreda_name = ?,
           kebele_name = ?
          WHERE id = ?`, [fullName, phoneNumber, newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name, id]
-            );
+                );
 
-            const [updated] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
-            return res.json({ message: 'Admin updated successfully', admin: updated[0] });
+                const [updated] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+                return res.json({ message: 'Farmer updated successfully', farmer: updated[0] });
+            } else {
+                await db.query(
+                    `UPDATE admins SET 
+          full_name = COALESCE(?, full_name),
+          phone_number = COALESCE(?, phone_number),
+          region_name = ?,
+          zone_name = ?,
+          woreda_name = ?,
+          kebele_name = ?
+         WHERE id = ?`, [fullName, phoneNumber, newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name, id]
+                );
+
+                const [updated] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
+                return res.json({ message: 'Admin updated successfully', admin: updated[0] });
+            }
         } catch (err) {
             console.error('Update lower admin error:', err);
             return res.status(500).json({ message: err.message || 'Server error' });
@@ -386,21 +435,146 @@ const adminManagement = {
             const creator = req.user;
             const { id } = req.params;
 
-            const [rows] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
-            if (!rows.length) return res.status(404).json({ message: 'Admin not found' });
-            const target = rows[0];
+            // Check if target is an admin or farmer
+            let isFarmer = false;
+            let target = null;
 
-            if (!helpers.roleIsLower(creator.role, target.role)) {
-                return res.status(403).json({ message: 'You can only delete lower-level admins' });
-            }
-            if (!helpers.scopeMatches(creator, target)) {
-                return res.status(403).json({ message: 'Target admin is outside your scope' });
+            // First check if it's an admin
+            const [adminRows] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
+            if (adminRows.length) {
+                target = adminRows[0];
+            } else {
+                // If not admin, check if it's a farmer
+                const [farmerRows] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+                if (farmerRows.length) {
+                    target = farmerRows[0];
+                    isFarmer = true;
+                } else {
+                    return res.status(404).json({ message: 'Admin or farmer not found' });
+                }
             }
 
-            await db.query('DELETE FROM admins WHERE id=?', [id]);
-            return res.json({ message: 'Admin deleted successfully' });
+            // Authorization checks
+            if (isFarmer) {
+                // For farmers: Kebele admins can delete farmers in their scope, higher admins can delete any farmer
+                if (creator.role === 'Kebele') {
+                    if (!helpers.scopeMatches(creator, target)) {
+                        return res.status(403).json({ message: 'Farmer is outside your scope' });
+                    }
+                } else if (!['Federal', 'Region', 'Zone', 'Woreda'].includes(creator.role)) {
+                    return res.status(403).json({ message: 'Only Kebele admins or higher can delete farmers' });
+                }
+            } else {
+                // For admins: Use the original role-based authorization
+                const creatorRank = RANK[creator.role] || 0;
+                const targetRank = RANK[target.role] || 0;
+
+                if (targetRank >= creatorRank) {
+                    return res.status(403).json({ message: 'You can only delete lower-level admins' });
+                }
+                if (!helpers.scopeMatches(creator, target)) {
+                    return res.status(403).json({ message: 'Target admin is outside your scope' });
+                }
+            }
+
+            // Perform deletion based on whether it's an admin or farmer
+            if (isFarmer) {
+                await db.query('DELETE FROM farmers WHERE id=?', [id]);
+                return res.json({ message: 'Farmer deleted successfully' });
+            } else {
+                await db.query('DELETE FROM admins WHERE id=?', [id]);
+                return res.json({ message: 'Admin deleted successfully' });
+            }
         } catch (err) {
             console.error('Delete lower admin error:', err);
+            return res.status(500).json({ message: 'Server error' });
+        }
+    },
+
+    // NEW: Kebele admin update own farmer
+    updateKebeleFarmer: async(req, res) => {
+        try {
+            const creator = req.user;
+            const { id } = req.params;
+            const { fullName, phoneNumber } = req.body;
+
+            // Only Kebele admins can use this function
+            if (creator.role !== 'Kebele') {
+                return res.status(403).json({ message: 'Only Kebele admins can update farmers using this endpoint' });
+            }
+
+            // Check if target is a farmer
+            const [farmerRows] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+            if (!farmerRows.length) {
+                return res.status(404).json({ message: 'Farmer not found' });
+            }
+
+            const farmer = farmerRows[0];
+
+            // Check if farmer is within Kebele admin's scope
+            if (!helpers.scopeMatches(creator, farmer)) {
+                return res.status(403).json({ message: 'Farmer is outside your kebele scope' });
+            }
+
+            // Check phone uniqueness if changed
+            if (phoneNumber && phoneNumber !== farmer.phone_number) {
+                const [existsA] = await db.query('SELECT id FROM admins WHERE phone_number=? LIMIT 1', [phoneNumber]);
+                const [existsF] = await db.query('SELECT id FROM farmers WHERE phone_number=? AND id<>? LIMIT 1', [phoneNumber, id]);
+                if (existsA.length || existsF.length) {
+                    return res.status(409).json({ message: 'Phone number already in use' });
+                }
+            }
+
+            // Update the farmer
+            await db.query(
+                `UPDATE farmers SET 
+                    full_name = COALESCE(?, full_name),
+                    phone_number = COALESCE(?, phone_number)
+                 WHERE id = ?`, [fullName, phoneNumber, id]
+            );
+
+            const [updated] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+            return res.json({
+                message: 'Farmer updated successfully',
+                farmer: updated[0]
+            });
+
+        } catch (err) {
+            console.error('Update kebele farmer error:', err);
+            return res.status(500).json({ message: err.message || 'Server error' });
+        }
+    },
+
+    // NEW: Kebele admin delete own farmer
+    deleteKebeleFarmer: async(req, res) => {
+        try {
+            const creator = req.user;
+            const { id } = req.params;
+
+            // Only Kebele admins can use this function
+            if (creator.role !== 'Kebele') {
+                return res.status(403).json({ message: 'Only Kebele admins can delete farmers using this endpoint' });
+            }
+
+            // Check if target is a farmer
+            const [farmerRows] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
+            if (!farmerRows.length) {
+                return res.status(404).json({ message: 'Farmer not found' });
+            }
+
+            const farmer = farmerRows[0];
+
+            // Check if farmer is within Kebele admin's scope
+            if (!helpers.scopeMatches(creator, farmer)) {
+                return res.status(403).json({ message: 'Farmer is outside your kebele scope' });
+            }
+
+            // Delete the farmer
+            await db.query('DELETE FROM farmers WHERE id=?', [id]);
+            return res.json({ message: 'Farmer deleted successfully' });
+
+        } catch (err) {
+            console.error('Delete kebele farmer error:', err);
             return res.status(500).json({ message: 'Server error' });
         }
     }
@@ -535,7 +709,7 @@ const requestManagement = {
             }
 
             const [requests] = await db.query(
-                `SELECT r.id, r.farmer_id, r.product_id, r.quantity, r.status, r.created_at,
+                `SELECT r.id, r.farmer_id, r.product_id, r.quantity, r.price, r.status, r.created_at,
                     f.full_name AS farmer_name, p.name as product_name,
                     r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status
              FROM requests r

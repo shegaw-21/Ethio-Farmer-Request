@@ -117,7 +117,7 @@ exports.createRequest = async(req, res) => {
 exports.listMyRequests = async(req, res) => {
     try {
         const [requests] = await db.query(`
-            SELECT r.id, r.product_id, p.name as product_name, p.category, 
+            SELECT r.id, r.product_id, p.name as product_name, p.category, p.price,
                    r.quantity, r.status, r.note, r.created_at,
                    a.full_name AS handled_by_admin 
             FROM requests r 
@@ -140,7 +140,7 @@ exports.getRequest = async(req, res) => {
         const { id } = req.params;
 
         const [request] = await db.query(`
-            SELECT r.*, p.name as product_name, p.category, p.description,
+            SELECT r.*, p.name as product_name, p.category, p.price, p.description,
                    a.full_name AS handled_by_admin 
             FROM requests r 
             JOIN products p ON r.product_id = p.id 

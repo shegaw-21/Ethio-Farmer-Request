@@ -21,12 +21,13 @@ const determineOverallStatus = (request) => {
     if (region_status === 'Accepted') return 'Accepted';
     if (federal_status === 'Accepted') return 'Accepted';
 
-    // Check for approval at each level
-    if (federal_status === 'Approved') return 'Approved';
-    if (region_status === 'Approved') return 'Approved';
-    if (zone_status === 'Approved') return 'Approved';
-    if (woreda_status === 'Approved') return 'Approved';
-    if (kebele_status === 'Approved') return 'Approved';
+    // Check for approval at each level - but return 'Pending' for main status column
+    // since the main status column only accepts 'Pending', 'Accepted', 'Rejected'
+    if (federal_status === 'Approved') return 'Pending'; // Still pending overall until final approval
+    if (region_status === 'Approved') return 'Pending'; // Still pending overall until final approval
+    if (zone_status === 'Approved') return 'Pending'; // Still pending overall until final approval
+    if (woreda_status === 'Approved') return 'Pending'; // Still pending overall until final approval
+    if (kebele_status === 'Approved') return 'Pending'; // Still pending overall until final approval
 
     return 'Pending';
 };

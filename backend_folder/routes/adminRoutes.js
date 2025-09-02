@@ -11,8 +11,8 @@ router.get('/me', authenticate, adminController.me);
 // Admin Management Routes
 router.post('/register', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.createLowerAdmin);
 router.get('/admins', authenticate, adminController.listInScope);
-router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.updateLowerAdmin);
-router.delete('/delete/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.deleteLowerAdmin);
+router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.updateLowerAdmin);
+router.delete('/delete/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.deleteLowerAdmin);
 router.post('/createfarmer', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.createLowerAdmin);
 
 // Product Management Routes
@@ -23,7 +23,10 @@ router.put('/editproduct/:id', authenticate, requireRoles('Federal', 'Region', '
 router.delete('/deleteproduct/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.deleteProduct);
 router.get('/otherproducts', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.listOtherAdminsProducts);
 
-// Request Management Routes
+// Request Management Routes// NEW: Kebele admin specific routes for managing farmers
+router.put('/kebele/farmer/:id', authenticate, requireRoles('Kebele'), adminController.updateKebeleFarmer);
+router.delete('/kebele/farmer/:id', authenticate, requireRoles('Kebele'), adminController.deleteKebeleFarmer);
+
 router.get('/getrequests', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.listRequests);
 router.put('/editrequest/:id/status', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.updateRequestStatus);
 router.delete('/deleterequest/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.deleteRejectedRequest);
