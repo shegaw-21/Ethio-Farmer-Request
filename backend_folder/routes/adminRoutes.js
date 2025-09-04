@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const { rateLimitMiddleware } = require('../middlewares/rateLimitMiddleware');
 
 const { authenticate, requireRoles } = require('../middlewares/authMiddleware');
 
-// Admin Authentication Routes
-router.post('/login', adminController.login);
+// Admin Authentication Routes with rate limiting
+router.post('/login', rateLimitMiddleware, adminController.login);
 router.get('/me', authenticate, adminController.me);
 
 // Admin Management Routes

@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { recordFailedAttempt, clearAttempts } = require('../middlewares/rateLimitMiddleware');
 
 // Constants
 const RANK = { Federal: 5, Region: 4, Zone: 3, Woreda: 2, Kebele: 1, Farmer: 0 };
@@ -39,7 +40,7 @@ const helpers = {
         return (RANK[targetRole] || -1) < (RANK[creatorRole] || 0);
     },
 
-    ensureUniquePerScope: async({ role, region_name, zone_name, woreda_name, kebele_name }) => {
+    ensureUniquePerScope: async ({ role, region_name, zone_name, woreda_name, kebele_name }) => {
         let sql = '';
         let params = [];
 
@@ -68,7 +69,7 @@ const helpers = {
 
 // Authentication
 const auth = {
-    login: async(req, res) => {
+    login: async (req, res) => {
         try {
             const { phoneNumber, password } = req.body;
             if (!phoneNumber || !password) {
@@ -76,11 +77,28 @@ const auth = {
             }
 
             const [rows] = await db.query('SELECT * FROM admins WHERE phone_number = ? LIMIT 1', [phoneNumber]);
-            if (rows.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
+            if (rows.length === 0) {
+                const attemptResult = recordFailedAttempt(req);
+                return res.status(401).json({ 
+                    message: 'Invalid credentials',
+                    attemptsRemaining: attemptResult.attemptsRemaining,
+                    blocked: attemptResult.blocked
+                });
+            }
 
             const admin = rows[0];
             const match = await bcrypt.compare(password, admin.password_hash || '');
-            if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+            if (!match) {
+                const attemptResult = recordFailedAttempt(req);
+                return res.status(401).json({ 
+                    message: 'Invalid credentials',
+                    attemptsRemaining: attemptResult.attemptsRemaining,
+                    blocked: attemptResult.blocked
+                });
+            }
+
+            // Clear attempts on successful login
+            clearAttempts(req);
 
             const token = helpers.sign(admin);
             return res.json({
@@ -102,7 +120,7 @@ const auth = {
         }
     },
 
-    me: async(req, res) => {
+    me: async (req, res) => {
         try {
             const [rows] = await db.query(
                 `SELECT id, full_name, phone_number, role, region_name, zone_name, woreda_name, kebele_name 
@@ -117,7 +135,7 @@ const auth = {
     },
 
     // NEW: Update federal admin own profile
-    updateFederalProfile: async(req, res) => {
+    updateFederalProfile: async (req, res) => {
         try {
             // Only federal admin can update their own profile
             if (req.user.role !== 'Federal') {
@@ -178,9 +196,32 @@ const auth = {
 
 // Admin Management
 const adminManagement = {
-    createLowerAdmin: async(req, res) => {
+    createLowerAdmin: async (req, res) => {
         const creator = req.user;
-        const { fullName, phoneNumber, password, role, region_name, zone_name, woreda_name, kebele_name } = req.body;
+        const {
+            fullName,
+            phoneNumber,
+            password,
+            role,
+            region_name,
+            zone_name,
+            woreda_name,
+            kebele_name,
+            // Agricultural fields
+            landSizeHectares,
+            cropTypes,
+            landType,
+            farmingExperience,
+            irrigationType,
+            farmingMethod,
+            primaryCrops,
+            secondaryCrops,
+            soilType,
+            hasLivestock,
+            livestockTypes,
+            annualIncome,
+            educationLevel
+        } = req.body;
 
         try {
             // Validation - Allow Kebele to create Farmers
@@ -226,10 +267,23 @@ const adminManagement = {
                     return res.status(409).json({ message: 'Phone number already registered' });
                 }
 
-                // Insert into farmers table
+                // Insert into farmers table with all agricultural fields
                 const [result] = await db.query(
-                    `INSERT INTO farmers (full_name, phone_number, password_hash, region_name, zone_name, woreda_name, kebele_name, created_at) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`, [fullName, phoneNumber, password_hash, region_name, zone_name, woreda_name, kebele_name]
+                    `INSERT INTO farmers (
+                        full_name, phone_number, password_hash, 
+                        region_name, zone_name, woreda_name, kebele_name,
+                        land_size_hectares, crop_types, land_type, farming_experience,
+                        irrigation_type, farming_method, primary_crops, secondary_crops,
+                        soil_type, has_livestock, livestock_types, annual_income, education_level,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                    [
+                        fullName, phoneNumber, password_hash,
+                        region_name, zone_name, woreda_name, kebele_name,
+                        landSizeHectares || null, cropTypes || null, landType || null, farmingExperience || null,
+                        irrigationType || null, farmingMethod || null, primaryCrops || null, secondaryCrops || null,
+                        soilType || null, hasLivestock || false, livestockTypes || null, annualIncome || null, educationLevel || null
+                    ]
                 );
 
                 const [saved] = await db.query('SELECT * FROM farmers WHERE id=?', [result.insertId]);
@@ -264,7 +318,7 @@ const adminManagement = {
         }
     },
 
-    listInScope: async(req, res) => {
+    listInScope: async (req, res) => {
         try {
             const myRank = RANK[req.user.role] || 0;
             let where = '1=1';
@@ -318,12 +372,32 @@ const adminManagement = {
             console.error('List in scope error:', err);
             return res.status(500).json({ message: 'Server error' });
         }
-    },
-    updateLowerAdmin: async(req, res) => {
+    }, updateLowerAdmin: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
-            const { fullName, phoneNumber, region_name, zone_name, woreda_name, kebele_name } = req.body;
+            const {
+                fullName,
+                phoneNumber,
+                region_name,
+                zone_name,
+                woreda_name,
+                kebele_name,
+                // Agricultural fields
+                landSizeHectares,
+                cropTypes,
+                landType,
+                farmingExperience,
+                irrigationType,
+                farmingMethod,
+                primaryCrops,
+                secondaryCrops,
+                soilType,
+                hasLivestock,
+                livestockTypes,
+                annualIncome,
+                educationLevel
+            } = req.body;
 
             // Check if target is an admin or farmer
             let isFarmer = false;
@@ -396,15 +470,37 @@ const adminManagement = {
 
             // Perform update based on whether it's an admin or farmer
             if (isFarmer) {
+                // Update farmer with all agricultural fields
                 await db.query(
                     `UPDATE farmers SET 
-          full_name = COALESCE(?, full_name),
-          phone_number = COALESCE(?, phone_number),
-          region_name = ?,
-          zone_name = ?,
-          woreda_name = ?,
-          kebele_name = ?
-         WHERE id = ?`, [fullName, phoneNumber, newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name, id]
+                        full_name = COALESCE(?, full_name),
+                        phone_number = COALESCE(?, phone_number),
+                        region_name = ?,
+                        zone_name = ?,
+                        woreda_name = ?,
+                        kebele_name = ?,
+                        land_size_hectares = COALESCE(?, land_size_hectares),
+                        crop_types = COALESCE(?, crop_types),
+                        land_type = COALESCE(?, land_type),
+                        farming_experience = COALESCE(?, farming_experience),
+                        irrigation_type = COALESCE(?, irrigation_type),
+                        farming_method = COALESCE(?, farming_method),
+                        primary_crops = COALESCE(?, primary_crops),
+                        secondary_crops = COALESCE(?, secondary_crops),
+                        soil_type = COALESCE(?, soil_type),
+                        has_livestock = COALESCE(?, has_livestock),
+                        livestock_types = COALESCE(?, livestock_types),
+                        annual_income = COALESCE(?, annual_income),
+                        education_level = COALESCE(?, education_level)
+                     WHERE id = ?`,
+                    [
+                        fullName, phoneNumber,
+                        newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name,
+                        landSizeHectares, cropTypes, landType, farmingExperience,
+                        irrigationType, farmingMethod, primaryCrops, secondaryCrops,
+                        soilType, hasLivestock, livestockTypes, annualIncome, educationLevel,
+                        id
+                    ]
                 );
 
                 const [updated] = await db.query('SELECT * FROM farmers WHERE id=?', [id]);
@@ -412,13 +508,13 @@ const adminManagement = {
             } else {
                 await db.query(
                     `UPDATE admins SET 
-          full_name = COALESCE(?, full_name),
-          phone_number = COALESCE(?, phone_number),
-          region_name = ?,
-          zone_name = ?,
-          woreda_name = ?,
-          kebele_name = ?
-         WHERE id = ?`, [fullName, phoneNumber, newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name, id]
+                        full_name = COALESCE(?, full_name),
+                        phone_number = COALESCE(?, phone_number),
+                        region_name = ?,
+                        zone_name = ?,
+                        woreda_name = ?,
+                        kebele_name = ?
+                     WHERE id = ?`, [fullName, phoneNumber, newVals.region_name, newVals.zone_name, newVals.woreda_name, newVals.kebele_name, id]
                 );
 
                 const [updated] = await db.query('SELECT * FROM admins WHERE id=?', [id]);
@@ -429,8 +525,7 @@ const adminManagement = {
             return res.status(500).json({ message: err.message || 'Server error' });
         }
     },
-
-    deleteLowerAdmin: async(req, res) => {
+    deleteLowerAdmin: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
@@ -492,7 +587,7 @@ const adminManagement = {
     },
 
     // NEW: Kebele admin update own farmer
-    updateKebeleFarmer: async(req, res) => {
+    updateKebeleFarmer: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
@@ -546,7 +641,7 @@ const adminManagement = {
     },
 
     // NEW: Kebele admin delete own farmer
-    deleteKebeleFarmer: async(req, res) => {
+    deleteKebeleFarmer: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
@@ -579,26 +674,67 @@ const adminManagement = {
         }
     }
 };
-
-// Product Management
 const productManagement = {
-    addProduct: async(req, res) => {
+    addProduct: async (req, res) => {
         try {
-            const { name, description, category, amount, price } = req.body;
-            if (!name || !description || !category || !amount || !price) return res.status(400).json({ message: 'Product name ,description ,amount,price and category are required' });
+            const {
+                name,
+                category,
+                price,
+                amount,
+                description,
+                sub_category,
+                unit,
+                manufacturer,
+                expiry_date
+            } = req.body;
+
+            // Required fields validation
+            if (!name || !category || !amount || !price) {
+                return res.status(400).json({
+                    message: 'Product name, category, amount, and price are required'
+                });
+            }
 
             const [result] = await db.query(
-                'INSERT INTO products (name, description, amount,category, price,created_by_admin_id) VALUES (?, ?, ?, ?, ?, ?)', [name, description || null, amount || null, category || null, price, req.user.id]
+                `INSERT INTO products (
+                    name, 
+                    category, 
+                    sub_category,
+                    price,
+                    amount, 
+                    unit,
+                    description,
+                    manufacturer,
+                    expiry_date,
+                    created_by_admin_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    name,
+                    category,
+                    sub_category || null,
+                    price,
+                    amount,
+                    unit || null,
+                    description || null,
+                    manufacturer || null,
+                    expiry_date || null,
+                    req.user.id
+                ]
             );
+
             const [product] = await db.query('SELECT * FROM products WHERE id=?', [result.insertId]);
-            return res.status(201).json({ message: 'Product created successfully', product: product[0] });
+            return res.status(201).json({
+                message: 'Product created successfully',
+                product: product[0]
+            });
         } catch (err) {
             console.error('Add product error:', err);
             return res.status(500).json({ message: 'Server error' });
         }
     },
     // All admins can view products added by other admins
-    listProducts: async(req, res) => {
+    listProducts: async (req, res) => {
         try {
             // All admins can see ALL products
             const [products] = await db.query(
@@ -610,7 +746,7 @@ const productManagement = {
             return res.status(500).json({ message: 'Server error' });
         }
     }, // NEW: Get products added by current admin
-    listMyProducts: async(req, res) => {
+    listMyProducts: async (req, res) => {
         try {
             const [products] = await db.query(
                 `SELECT p.*, a.full_name as created_by_name 
@@ -625,7 +761,7 @@ const productManagement = {
             return res.status(500).json({ message: 'Server error' });
         }
     }, // NEW: Get products added by other admins (excluding current admin)
-    listOtherAdminsProducts: async(req, res) => {
+    listOtherAdminsProducts: async (req, res) => {
         try {
             const [products] = await db.query(
                 `SELECT p.*, a.full_name as created_by_name, 
@@ -642,7 +778,7 @@ const productManagement = {
         }
     },
 
-    updateProduct: async(req, res) => {
+    updateProduct: async (req, res) => {
         try {
             const { id } = req.params;
             const { name, description, amount, category } = req.body;
@@ -670,7 +806,7 @@ const productManagement = {
         }
     },
 
-    deleteProduct: async(req, res) => {
+    deleteProduct: async (req, res) => {
         try {
             const { id } = req.params;
             const [rows] = await db.query(
@@ -688,7 +824,7 @@ const productManagement = {
 };
 // Request Management
 const requestManagement = {
-    listRequests: async(req, res) => {
+    listRequests: async (req, res) => {
         try {
             const admin = req.user;
             let where = '1=1';
@@ -727,7 +863,7 @@ const requestManagement = {
         }
     },
 
-    updateRequestStatus: async(req, res) => {
+    updateRequestStatus: async (req, res) => {
         try {
             const admin = req.user;
             const { id } = req.params;
@@ -779,7 +915,7 @@ const requestManagement = {
     },
 
     // NEW: Delete rejected requests
-    deleteRejectedRequest: async(req, res) => {
+    deleteRejectedRequest: async (req, res) => {
         try {
             const admin = req.user;
             const { id } = req.params;

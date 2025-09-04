@@ -1,19 +1,37 @@
 const db = require('../config/db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { recordFailedAttempt, clearAttempts } = require('../middlewares/rateLimitMiddleware');
 
 // ====== Farmer login ======
-exports.login = async(req, res) => {
+exports.login = async (req, res) => {
     try {
         const { phoneNumber, password } = req.body;
         if (!phoneNumber || !password) return res.status(400).json({ message: 'phoneNumber and password are required' });
 
         const [rows] = await db.query('SELECT * FROM farmers WHERE phone_number=? LIMIT 1', [phoneNumber]);
-        if (!rows.length) return res.status(401).json({ message: 'Invalid credentials' });
+        if (!rows.length) {
+            const attemptResult = recordFailedAttempt(req);
+            return res.status(401).json({ 
+                message: 'Invalid credentials',
+                attemptsRemaining: attemptResult.attemptsRemaining,
+                blocked: attemptResult.blocked
+            });
+        }
 
         const farmer = rows[0];
         const match = await bcrypt.compare(password, farmer.password_hash || '');
-        if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+        if (!match) {
+            const attemptResult = recordFailedAttempt(req);
+            return res.status(401).json({ 
+                message: 'Invalid credentials',
+                attemptsRemaining: attemptResult.attemptsRemaining,
+                blocked: attemptResult.blocked
+            });
+        }
+
+        // Clear attempts on successful login
+        clearAttempts(req);
 
         const token = jwt.sign({
             id: farmer.id,
@@ -40,9 +58,13 @@ exports.login = async(req, res) => {
 };
 
 // ====== Create a new request ======
-exports.createRequest = async(req, res) => {
+exports.createRequest = async (req, res) => {
     try {
-        // Check if user is a farmer
+        // Check if user is authenticated and is a farmer
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         if (req.user.role !== 'Farmer') {
             return res.status(403).json({ message: 'Only farmers can create requests' });
         }
@@ -78,7 +100,8 @@ exports.createRequest = async(req, res) => {
 
         // Check if request is already pending for the same product
         const [existingRequest] = await db.query(
-            'SELECT id FROM requests WHERE farmer_id=? AND product_id=? AND status="Pending" LIMIT 1', [farmer.id, product_id]
+            'SELECT id FROM requests WHERE farmer_id=? AND product_id=? AND status="Pending" LIMIT 1',
+            [farmer.id, product_id]
         );
 
         if (existingRequest.length > 0) {
@@ -90,9 +113,9 @@ exports.createRequest = async(req, res) => {
             `INSERT INTO requests (farmer_id, product_id, quantity, note, 
              region_name, zone_name, woreda_name, kebele_name, status,
              kebele_status, woreda_status, zone_status, region_status, federal_status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', 'Pending', 'Pending', 'Pending', 'Pending', 'Pending')`, [farmer.id, product_id, quantity, note || null,
-                farmer.region_name, farmer.zone_name, farmer.woreda_name, farmer.kebele_name
-            ]
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', 'Pending', 'Pending', 'Pending', 'Pending', 'Pending')`,
+            [farmer.id, product_id, quantity, note || null,
+            farmer.region_name, farmer.zone_name, farmer.woreda_name, farmer.kebele_name]
         );
 
         const [savedRequest] = await db.query(`
@@ -114,11 +137,16 @@ exports.createRequest = async(req, res) => {
 };
 
 // ====== Get my requests ======
-exports.listMyRequests = async(req, res) => {
+exports.listMyRequests = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const [requests] = await db.query(`
             SELECT r.id, r.product_id, p.name as product_name, p.category, p.price,
                    r.quantity, r.status, r.note, r.created_at,
+                   r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status,
                    a.full_name AS handled_by_admin 
             FROM requests r 
             JOIN products p ON r.product_id = p.id 
@@ -135,8 +163,12 @@ exports.listMyRequests = async(req, res) => {
 };
 
 // ====== Get single request ======
-exports.getRequest = async(req, res) => {
+exports.getRequest = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const { id } = req.params;
 
         const [request] = await db.query(`
@@ -160,8 +192,12 @@ exports.getRequest = async(req, res) => {
 };
 
 // ====== Update my request ======
-exports.updateRequest = async(req, res) => {
+exports.updateRequest = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const { id } = req.params;
         const { quantity, note } = req.body;
 
@@ -172,7 +208,9 @@ exports.updateRequest = async(req, res) => {
 
         // Check if request exists and belongs to farmer
         const [requestRows] = await db.query(
-            'SELECT * FROM requests WHERE id=? AND farmer_id=?', [id, req.user.id]
+            `SELECT *, kebele_status, woreda_status, zone_status, region_status, federal_status 
+             FROM requests WHERE id=? AND farmer_id=?`,
+            [id, req.user.id]
         );
 
         if (requestRows.length === 0) {
@@ -181,10 +219,20 @@ exports.updateRequest = async(req, res) => {
 
         const request = requestRows[0];
 
-        // Check if request can be updated (only pending requests can be updated)
-        if (request.status !== 'Pending') {
+        // Check if request can be updated (only if all kebele and above statuses are Pending)
+        const higherLevelStatuses = [
+            request.kebele_status,
+            request.woreda_status,
+            request.zone_status,
+            request.region_status,
+            request.federal_status
+        ];
+
+        const hasProcessedBeyondFarmer = higherLevelStatuses.some(status => status !== 'Pending');
+
+        if (hasProcessedBeyondFarmer) {
             return res.status(400).json({
-                message: `Cannot update request with status: ${request.status}. Only pending requests can be updated.`
+                message: 'Cannot update request: It has been processed beyond farmer level'
             });
         }
 
@@ -194,7 +242,8 @@ exports.updateRequest = async(req, res) => {
                 quantity = COALESCE(?, quantity),
                 note = COALESCE(?, note),
                 created_at = CURRENT_TIMESTAMP
-             WHERE id = ?`, [quantity, note, id]
+             WHERE id = ?`,
+            [quantity, note, id]
         );
 
         // Get updated request
@@ -217,13 +266,19 @@ exports.updateRequest = async(req, res) => {
 };
 
 // ====== Delete my request ======
-exports.deleteRequest = async(req, res) => {
+exports.deleteRequest = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const { id } = req.params;
 
         // Check if request exists and belongs to farmer
         const [requestRows] = await db.query(
-            'SELECT * FROM requests WHERE id=? AND farmer_id=?', [id, req.user.id]
+            `SELECT *, kebele_status, woreda_status, zone_status, region_status, federal_status 
+             FROM requests WHERE id=? AND farmer_id=?`,
+            [id, req.user.id]
         );
 
         if (requestRows.length === 0) {
@@ -232,10 +287,20 @@ exports.deleteRequest = async(req, res) => {
 
         const request = requestRows[0];
 
-        // Check if request can be deleted (only pending requests can be deleted)
-        if (request.status !== 'Pending') {
+        // Check if request can be deleted (only if all kebele and above statuses are Pending)
+        const higherLevelStatuses = [
+            request.kebele_status,
+            request.woreda_status,
+            request.zone_status,
+            request.region_status,
+            request.federal_status
+        ];
+
+        const hasProcessedBeyondFarmer = higherLevelStatuses.some(status => status !== 'Pending');
+
+        if (hasProcessedBeyondFarmer) {
             return res.status(400).json({
-                message: `Cannot delete request with status: ${request.status}. Only pending requests can be deleted.`
+                message: 'Cannot delete request: It has been processed beyond farmer level'
             });
         }
 
@@ -251,8 +316,12 @@ exports.deleteRequest = async(req, res) => {
 };
 
 // ====== Get my profile ======
-exports.my = async(req, res) => {
+exports.my = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const [rows] = await db.query(`
             SELECT id, full_name, phone_number, region_name, zone_name, 
                    woreda_name, kebele_name, created_at 
@@ -265,10 +334,15 @@ exports.my = async(req, res) => {
         console.error('my error:', err);
         return res.status(500).json({ message: 'Server error: ' + err.message });
     }
-}; // ====== Get all products for farmers ======
-exports.getAllProducts = async(req, res) => {
+};
+
+// ====== Get all products for farmers ======
+exports.getAllProducts = async (req, res) => {
     try {
-        // Get all products from the database (not filtered by admin)
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const [products] = await db.query(`
             SELECT * FROM products 
             ORDER BY created_at DESC
@@ -281,9 +355,13 @@ exports.getAllProducts = async(req, res) => {
     }
 };
 
-// Add this new function to farmerController.js
-exports.getRequestStatusDetail = async(req, res) => {
+// ====== Get request status detail ======
+exports.getRequestStatusDetail = async (req, res) => {
     try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
         const { id } = req.params;
 
         const [request] = await db.query(
@@ -302,7 +380,8 @@ exports.getRequestStatusDetail = async(req, res) => {
              LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
              LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
              LEFT JOIN products p ON r.product_id = p.id
-             WHERE r.id = ? AND r.farmer_id = ?`, [id, req.user.id]
+             WHERE r.id = ? AND r.farmer_id = ?`,
+            [id, req.user.id]
         );
 
         if (request.length === 0) {
@@ -313,5 +392,131 @@ exports.getRequestStatusDetail = async(req, res) => {
     } catch (err) {
         console.error('getRequestStatusDetail error:', err);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ====== Confirm delivery of an accepted request ======
+exports.confirmDelivery = async (req, res) => {
+    try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const { id } = req.params; // request id
+        const { note } = req.body;
+        const farmerId = req.user.id;
+
+        // Ensure request belongs to farmer and get full details
+        const [rows] = await db.query(
+            `SELECT r.*, 
+                    kebele_admin.full_name AS kebele_admin_name, r.kebele_admin_id,
+                    woreda_admin.full_name AS woreda_admin_name, r.woreda_admin_id,
+                    zone_admin.full_name AS zone_admin_name, r.zone_admin_id,
+                    region_admin.full_name AS region_admin_name, r.region_admin_id,
+                    federal_admin.full_name AS federal_admin_name, r.federal_admin_id
+             FROM requests r
+             LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
+             LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
+             LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
+             LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
+             LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
+             WHERE r.id = ? AND r.farmer_id = ?`,
+            [id, farmerId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Request not found or access denied' });
+        }
+
+        const request = rows[0];
+
+        // Determine at what level it was accepted
+        let acceptedRole = null;
+        let acceptedAdminId = null;
+        let acceptedAdminName = null;
+
+        if (request.kebele_status === 'Accepted') {
+            acceptedRole = 'Kebele';
+            acceptedAdminId = request.kebele_admin_id;
+            acceptedAdminName = request.kebele_admin_name;
+        } else if (request.woreda_status === 'Accepted') {
+            acceptedRole = 'Woreda';
+            acceptedAdminId = request.woreda_admin_id;
+            acceptedAdminName = request.woreda_admin_name;
+        } else if (request.zone_status === 'Accepted') {
+            acceptedRole = 'Zone';
+            acceptedAdminId = request.zone_admin_id;
+            acceptedAdminName = request.zone_admin_name;
+        } else if (request.region_status === 'Accepted') {
+            acceptedRole = 'Region';
+            acceptedAdminId = request.region_admin_id;
+            acceptedAdminName = request.region_admin_name;
+        } else if (request.federal_status === 'Accepted') {
+            acceptedRole = 'Federal';
+            acceptedAdminId = request.federal_admin_id;
+            acceptedAdminName = request.federal_admin_name;
+        }
+
+        if (!acceptedRole) {
+            return res.status(400).json({ message: 'This request has not been accepted at any level' });
+        }
+
+        // Check if delivery already confirmed
+        const [existingDelivery] = await db.query(
+            `SELECT id FROM deliveries WHERE request_id = ? AND farmer_id = ? LIMIT 1`,
+            [request.id, farmerId]
+        );
+
+        if (existingDelivery.length > 0) {
+            return res.status(409).json({ message: 'This delivery is already confirmed' });
+        }
+
+        // Insert into deliveries
+        await db.query(
+            `INSERT INTO deliveries 
+             (request_id, farmer_id, product_id, quantity, confirmed, confirmation_date, confirmation_note, 
+              accepted_role, accepted_admin_id, accepted_admin_name)
+             VALUES (?, ?, ?, ?, 1, NOW(), ?, ?, ?, ?)`,
+            [
+                request.id,
+                farmerId,
+                request.product_id,
+                request.quantity,
+                note || null,
+                acceptedRole,
+                acceptedAdminId,
+                acceptedAdminName
+            ]
+        );
+
+        res.json({ message: 'Delivery confirmed successfully' });
+    } catch (err) {
+        console.error('confirmDelivery error:', err);
+        res.status(500).json({ message: 'Server error: ' + err.message });
+    }
+};
+
+// ====== Get my confirmed deliveries ======
+exports.listMyDeliveries = async (req, res) => {
+    try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const [deliveries] = await db.query(
+            `SELECT d.id, d.request_id, d.product_id, p.name AS product_name, p.category, p.price,
+                    d.quantity, d.confirmed, d.confirmation_date, d.confirmation_note,
+                    d.accepted_role, d.accepted_admin_name, d.delivered_at
+             FROM deliveries d
+             JOIN products p ON d.product_id = p.id
+             WHERE d.farmer_id = ?
+             ORDER BY d.confirmation_date DESC`,
+            [req.user.id]
+        );
+
+        res.json(deliveries);
+    } catch (err) {
+        console.error('listMyDeliveries error:', err);
+        res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
