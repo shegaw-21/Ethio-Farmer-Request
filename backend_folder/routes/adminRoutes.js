@@ -12,8 +12,7 @@ router.get('/me', authenticate, adminController.me);
 // Admin Management Routes
 router.post('/register', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.createLowerAdmin);
 router.get('/admins', authenticate, adminController.listInScope);
-router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.updateLowerAdmin);
-router.delete('/delete/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.deleteLowerAdmin);
+router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.updateLowerAdmin);
 router.post('/createfarmer', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.createLowerAdmin);
 
 // Product Management Routes
@@ -25,15 +24,20 @@ router.delete('/deleteproduct/:id', authenticate, requireRoles('Federal', 'Regio
 router.get('/otherproducts', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.listOtherAdminsProducts);
 
 // Request Management Routes// NEW: Kebele admin specific routes for managing farmers
-router.put('/kebele/farmer/:id', authenticate, requireRoles('Kebele'), adminController.updateKebeleFarmer);
-router.delete('/kebele/farmer/:id', authenticate, requireRoles('Kebele'), adminController.deleteKebeleFarmer);
 
 router.get('/getrequests', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.listRequests);
 router.put('/editrequest/:id/status', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.updateRequestStatus);
 router.delete('/deleterequest/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.deleteRejectedRequest);
 // Federal admin profile update route
 router.put('/profile', authenticate, requireRoles('Federal'), adminController.updateFederalProfile);
-// Approval Workflow Routes - FIXED MOUNTING
+router.get('/farmers', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.listFarmersInScope);
+// Approval Workflow Routes - FIXED MOUNTING// Add this line to adminRoutes.js
 router.use('/', require('./approvalWorkflowRoutes'));
+router.put('/farmers/:id/profile', authenticate, requireRoles('Kebele'), adminController.updateFarmerProfile);
+router.post('/reports', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.createReport);
+router.get('/reports/my', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.getMyReports);
+router.get('/reports', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.getReportsInScope);
+router.put('/reports/:id/status', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.updateReportStatus);
+router.get('/reports/statistics', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.getReportStatistics);
 
 module.exports = router;

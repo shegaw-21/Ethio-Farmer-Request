@@ -10,7 +10,8 @@ router.get('/requests/status', authenticate, requireRoles('Federal', 'Region', '
 // Admin updates request status at their level (FIXED: changed from /level to proper endpoint)
 router.put('/requests/:id/status', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), approvalWorkflowController.updateRequestStatusAtLevel);
 // NEW: Filter requests by status
-router.get('/requests/filter', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), approvalWorkflowController.listRequestsByStatus);
+// Update the route to handle both farmers and admins
+router.get('/requests/filter', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele', 'Farmer'), approvalWorkflowController.listRequestsByStatus);
 router.get('/requests/filter?status=pending', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), approvalWorkflowController.listRequestsByStatus);
 router.get('/requests/filter?status=approved', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), approvalWorkflowController.listRequestsByStatus);
 router.get('/requests/filter?status=accepted', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), approvalWorkflowController.listRequestsByStatus);

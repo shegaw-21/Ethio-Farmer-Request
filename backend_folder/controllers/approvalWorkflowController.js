@@ -1,35 +1,115 @@
-// File: approvalWorkflowController.js
+// File: approvalWorkflowController.js - UPDATED determineOverallStatus function
 const db = require('../config/db');
 
 // Constants
 const RANK = { Federal: 5, Region: 4, Zone: 3, Woreda: 2, Kebele: 1 };
 
-// Helper function to determine overall status based on level statuses
-const determineOverallStatus = (request) => {
-    const { kebele_status, woreda_status, zone_status, region_status, federal_status } = request;
+// Helper function to determine status based on admin role
+const determineStatusForAdmin = (request, adminRole) => {
+    switch (adminRole) {
+        case 'Kebele':
+            return request.kebele_status || 'Pending';
+        case 'Woreda':
+            return request.woreda_status || 'Pending';
+        case 'Zone':
+            return request.zone_status || 'Pending';
+        case 'Region':
+            return request.region_status || 'Pending';
+        case 'Federal':
+            return request.federal_status || 'Pending';
+        default:
+            // For farmers or unknown roles, use the original logic
+            return determineOverallStatus(request);
+    }
+};
 
-    // If any level has rejected, overall is rejected
-    if (kebele_status === 'Rejected' || woreda_status === 'Rejected' ||
-        zone_status === 'Rejected' || region_status === 'Rejected' || federal_status === 'Rejected') {
-        return 'Rejected';
+// Original helper function to determine detailed status based on level statuses
+const determineOverallStatus = (request) => {
+    const {
+        kebele_status,
+        woreda_status,
+        zone_status,
+        region_status,
+        federal_status
+    } = request;
+
+    // Get all statuses in order of hierarchy
+    const statuses = [
+        { level: 'kebele', status: kebele_status },
+        { level: 'woreda', status: woreda_status },
+        { level: 'zone', status: zone_status },
+        { level: 'region', status: region_status },
+        { level: 'federal', status: federal_status }
+    ];
+
+    // Check if all statuses are Pending
+    if (statuses.every(s => s.status === 'Pending')) {
+        return 'Pending for all';
     }
 
-    // If any level has accepted, overall is accepted (product is available at that level)
-    if (kebele_status === 'Accepted') return 'Accepted';
-    if (woreda_status === 'Accepted') return 'Accepted';
-    if (zone_status === 'Accepted') return 'Accepted';
-    if (region_status === 'Accepted') return 'Accepted';
-    if (federal_status === 'Accepted') return 'Accepted';
+    // Check if any level has rejected
+    const rejectedLevel = statuses.find(s => s.status === 'Rejected');
+    if (rejectedLevel) {
+        const approvedLevels = statuses
+            .filter(s => s.status === 'Approved' && RANK[s.level] < RANK[rejectedLevel.level])
+            .map(s => s.level);
 
-    // Check for approval at each level - but return 'Pending' for main status column
-    // since the main status column only accepts 'Pending', 'Accepted', 'Rejected'
-    if (federal_status === 'Approved') return 'Pending'; // Still pending overall until final approval
-    if (region_status === 'Approved') return 'Pending'; // Still pending overall until final approval
-    if (zone_status === 'Approved') return 'Pending'; // Still pending overall until final approval
-    if (woreda_status === 'Approved') return 'Pending'; // Still pending overall until final approval
-    if (kebele_status === 'Approved') return 'Pending'; // Still pending overall until final approval
+        const pendingLevels = statuses
+            .filter(s => s.status === 'Pending' && RANK[s.level] > RANK[rejectedLevel.level])
+            .map(s => s.level);
 
-    return 'Pending';
+        let statusText = '';
+        if (approvedLevels.length > 0) {
+            statusText += `approved for (${approvedLevels.join(', ')}) `;
+        }
+        statusText += `rejected for ${rejectedLevel.level}`;
+        if (pendingLevels.length > 0) {
+            statusText += ` and pending for ${pendingLevels.join(', ')}`;
+        }
+
+        return statusText;
+    }
+
+    // Check if any level has accepted
+    const acceptedLevel = statuses.find(s => s.status === 'Accepted');
+    if (acceptedLevel) {
+        const approvedLevels = statuses
+            .filter(s => s.status === 'Approved' && RANK[s.level] < RANK[acceptedLevel.level])
+            .map(s => s.level);
+
+        const pendingLevels = statuses
+            .filter(s => s.status === 'Pending' && RANK[s.level] > RANK[acceptedLevel.level])
+            .map(s => s.level);
+
+        let statusText = `Accepted for ${acceptedLevel.level}`;
+        if (approvedLevels.length > 0) {
+            statusText += `, approved for (${approvedLevels.join(', ')})`;
+        }
+        if (pendingLevels.length > 0) {
+            statusText += `, pending for ${pendingLevels.join(', ')}`;
+        }
+
+        return statusText;
+    }
+
+    // Check for approval at any level
+    const approvedLevels = statuses.filter(s => s.status === 'Approved');
+    if (approvedLevels.length > 0) {
+        const highestApprovedLevel = Math.max(...approvedLevels.map(al => RANK[al.level]));
+        const pendingLevels = statuses
+            .filter(s => s.status === 'Pending' && RANK[s.level] > highestApprovedLevel)
+            .map(s => s.level);
+
+        let statusText = `Approved for (${approvedLevels.map(al => al.level).join(', ')})`;
+        if (pendingLevels.length > 0) {
+            statusText += ` but pending for ${pendingLevels.join(', ')}`;
+        }
+
+        return statusText;
+    }
+
+    // If all levels are pending (should be caught by first condition, but just in case)
+    return 'Pending for all';
 };
 
 // NEW: Helper function to check if admin can modify a request at their level
@@ -78,9 +158,9 @@ exports.updateRequestStatusAtLevel = async(req, res) => {
         // Get request details
         const [rows] = await db.query(
             `SELECT r.*, f.region_name, f.zone_name, f.woreda_name, f.kebele_name 
-             FROM requests r 
-             JOIN farmers f ON r.farmer_id = f.id 
-             WHERE r.id=?`, [id]
+       FROM requests r 
+       JOIN farmers f ON r.farmer_id = f.id 
+       WHERE r.id=?`, [id]
         );
 
         if (!rows.length) return res.status(404).json({ message: 'Request not found' });
@@ -150,37 +230,39 @@ exports.updateRequestStatusAtLevel = async(req, res) => {
 
         // Create updated request object for status determination
         const updatedRequest = {...request, [updateField]: status };
-        const overallStatus = determineOverallStatus(updatedRequest);
+
+        // Use the role-specific status for the response
+        const statusForAdmin = determineStatusForAdmin(updatedRequest, admin.role);
 
         // Update the specific level status
         await db.query(
             `UPDATE requests SET 
-                ${updateField} = ?,
-                ${adminIdField} = ?,
-                ${timestampField} = NOW(),
-                ${feedbackField} = ?,
-                status = ?
-             WHERE id = ?`, [status, admin.id, feedback || '', overallStatus, id]
+          ${updateField} = ?,
+          ${adminIdField} = ?,
+          ${timestampField} = NOW(),
+          ${feedbackField} = ?,
+          status = ?
+       WHERE id = ?`, [status, admin.id, feedback || '', statusForAdmin, id]
         );
 
         // Get updated request with details
         const [updatedRequestRows] = await db.query(
             `SELECT r.*, f.full_name AS farmer_name, 
-                    kebele_admin.full_name AS kebele_admin_name,
-                    woreda_admin.full_name AS woreda_admin_name,
-                    zone_admin.full_name AS zone_admin_name,
-                    region_admin.full_name AS region_admin_name,
-                    federal_admin.full_name AS federal_admin_name,
-                    p.name as product_name, p.category as product_category
-             FROM requests r
-             JOIN farmers f ON r.farmer_id = f.id
-             LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
-             LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
-             LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
-             LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
-             LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
-             LEFT JOIN products p ON r.product_id = p.id
-             WHERE r.id=?`, [id]
+              kebele_admin.full_name AS kebele_admin_name,
+              woreda_admin.full_name AS woreda_admin_name,
+              zone_admin.full_name AS zone_admin_name,
+              region_admin.full_name AS region_admin_name,
+              federal_admin.full_name AS federal_admin_name,
+              p.name as product_name, p.category as product_category
+       FROM requests r
+       JOIN farmers f ON r.farmer_id = f.id
+       LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
+       LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
+       LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
+       LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
+       LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
+       LEFT JOIN products p ON r.product_id = p.id
+       WHERE r.id=?`, [id]
         );
 
         res.json({
@@ -193,68 +275,117 @@ exports.updateRequestStatusAtLevel = async(req, res) => {
         res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
-// NEW: Filter requests by status with proper status mapping
+
+// File: approvalWorkflowController.js - UPDATED listRequestsByStatus function
 exports.listRequestsByStatus = async(req, res) => {
     try {
-        const admin = req.user;
-        const { status } = req.query; // Get status from query params
+        const user = req.user;
+        const { status } = req.query;
 
         let where = '1=1';
         const params = [];
 
-        // Apply scope filtering based on admin role
-        if (admin.role === 'Region') {
-            where = 'r.region_name=?';
-            params.push(admin.region_name);
-        } else if (admin.role === 'Zone') {
-            where = 'r.zone_name=?';
-            params.push(admin.zone_name);
-        } else if (admin.role === 'Woreda') {
-            where = 'r.woreda_name=?';
-            params.push(admin.woreda_name);
-        } else if (admin.role === 'Kebele') {
-            where = 'r.kebele_name=?';
-            params.push(admin.kebele_name);
-        }
+        // Handle farmer vs admin differently
+        if (user.role === 'Farmer') {
+            // Farmer can only see their own requests
+            where = 'r.farmer_id=?';
+            params.push(user.id);
 
-        // Apply status filtering if provided
-        if (status && status !== 'all') {
-            // Map query status to database status values
-            let dbStatus = status;
-            if (status === 'accepted') dbStatus = 'Accepted';
-            if (status === 'approved') dbStatus = 'Approved';
-            if (status === 'rejected') dbStatus = 'Rejected';
-            if (status === 'pending') dbStatus = 'Pending';
+            // Farmer-specific status filtering
+            if (status && status !== 'all') {
+                if (status === 'pending') {
+                    // Pending: all levels are pending
+                    where += ' AND r.kebele_status = "Pending" AND r.woreda_status = "Pending" AND r.zone_status = "Pending" AND r.region_status = "Pending" AND r.federal_status = "Pending"';
+                } else if (status === 'accepted') {
+                    // Accepted: accepted at any level
+                    where += ' AND (r.kebele_status = "Accepted" OR r.woreda_status = "Accepted" OR r.zone_status = "Accepted" OR r.region_status = "Accepted" OR r.federal_status = "Accepted")';
+                } else if (status === 'rejected') {
+                    // Rejected: rejected at any level
+                    where += ' AND (r.kebele_status = "Rejected" OR r.woreda_status = "Rejected" OR r.zone_status = "Rejected" OR r.region_status = "Rejected" OR r.federal_status = "Rejected")';
+                } else if (status === 'approved') {
+                    // Approved: has approvals but no accept/reject
+                    where += ' AND r.kebele_status != "Accepted" AND r.woreda_status != "Accepted" AND r.zone_status != "Accepted" AND r.region_status != "Accepted" AND r.federal_status != "Accepted"';
+                    where += ' AND r.kebele_status != "Rejected" AND r.woreda_status != "Rejected" AND r.zone_status != "Rejected" AND r.region_status != "Rejected" AND r.federal_status != "Rejected"';
+                    where += ' AND (r.kebele_status = "Approved" OR r.woreda_status = "Approved" OR r.zone_status = "Approved" OR r.region_status = "Approved" OR r.federal_status = "Approved")';
+                }
+            }
+        } else {
+            // Admin-specific filtering with scope
+            if (user.role === 'Region') {
+                where = 'r.region_name=?';
+                params.push(user.region_name);
+            } else if (user.role === 'Zone') {
+                where = 'r.zone_name=?';
+                params.push(user.zone_name);
+            } else if (user.role === 'Woreda') {
+                where = 'r.woreda_name=?';
+                params.push(user.woreda_name);
+            } else if (user.role === 'Kebele') {
+                where = 'r.kebele_name=?';
+                params.push(user.kebele_name);
+            }
 
-            where += ' AND r.status = ?';
-            params.push(dbStatus);
+            // Admin-specific status filtering based on their level
+            if (status && status !== 'all') {
+                let statusCondition = '';
+
+                switch (status) {
+                    case 'pending':
+                        // Pending: requests that have any status below this role level
+                        statusCondition = `${getAdminLevelField(user.role)} = "Pending"`;
+                        break;
+                    case 'accepted':
+                        // Accepted: requests accepted by only this level
+                        statusCondition = `${getAdminLevelField(user.role)} = "Accepted"`;
+                        break;
+                    case 'rejected':
+                        // Rejected: requests rejected by only this level
+                        statusCondition = `${getAdminLevelField(user.role)} = "Rejected"`;
+                        break;
+                    case 'approved':
+                        // Approved: requests approved by this level
+                        statusCondition = `${getAdminLevelField(user.role)} = "Approved"`;
+                        break;
+                }
+
+                if (statusCondition) {
+                    where += ` AND ${statusCondition}`;
+                }
+            }
         }
 
         const [requests] = await db.query(
             `SELECT r.id, r.farmer_id, r.product_id, r.quantity, r.status, 
-                    r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status,
-                    r.kebele_feedback, r.woreda_feedback, r.zone_feedback, r.region_feedback, r.federal_feedback,
-                    r.kebele_approved_at, r.woreda_approved_at, r.zone_approved_at, r.region_approved_at, r.federal_approved_at,
-                    r.region_name, r.zone_name, r.woreda_name, r.kebele_name,
-                    f.full_name AS farmer_name, f.phone_number AS farmer_phone,
-                    kebele_admin.full_name AS kebele_admin_name,
-                    woreda_admin.full_name AS woreda_admin_name,
-                    zone_admin.full_name AS zone_admin_name,
-                    region_admin.full_name AS region_admin_name,
-                    federal_admin.full_name AS federal_admin_name,
-                    p.name as product_name, p.category as product_category, p.amount as product_amount
-             FROM requests r
-             JOIN farmers f ON r.farmer_id = f.id
-             LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
-             LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
-             LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
-             LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
-             LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
-             LEFT JOIN products p ON r.product_id = p.id
-             WHERE ${where}
-             ORDER BY r.created_at DESC`,
+              r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status,
+              r.kebele_feedback, r.woreda_feedback, r.zone_feedback, r.region_feedback, r.federal_feedback,
+              r.kebele_approved_at, r.woreda_approved_at, r.zone_approved_at, r.region_approved_at, r.federal_approved_at,
+              r.region_name, r.zone_name, r.woreda_name, r.kebele_name,
+              f.full_name AS farmer_name, f.phone_number AS farmer_phone,
+              kebele_admin.full_name AS kebele_admin_name,
+              woreda_admin.full_name AS woreda_admin_name,
+              zone_admin.full_name AS zone_admin_name,
+              region_admin.full_name AS region_admin_name,
+              federal_admin.full_name AS federal_admin_name,
+              p.name as product_name, p.category as product_category, p.amount as product_amount
+       FROM requests r
+       JOIN farmers f ON r.farmer_id = f.id
+       LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
+       LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
+       LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
+       LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
+       LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
+       LEFT JOIN products p ON r.product_id = p.id
+       WHERE ${where}
+       ORDER BY r.created_at DESC`,
             params
         );
+
+        // For admins, update the status field to show their level-specific status
+        if (user.role !== 'Farmer') {
+            requests.forEach(request => {
+                request.status = determineStatusForAdmin(request, user.role);
+            });
+        }
 
         res.json(requests);
     } catch (err) {
@@ -262,31 +393,56 @@ exports.listRequestsByStatus = async(req, res) => {
         res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
+
+// Helper function to get the appropriate status field for an admin role
+function getAdminLevelField(role) {
+    switch (role) {
+        case 'Kebele':
+            return 'r.kebele_status';
+        case 'Woreda':
+            return 'r.woreda_status';
+        case 'Zone':
+            return 'r.zone_status';
+        case 'Region':
+            return 'r.region_status';
+        case 'Federal':
+            return 'r.federal_status';
+        default:
+            return 'r.kebele_status';
+    }
+}
+
 exports.getRequestStatusDetail = async(req, res) => {
     try {
         const { id } = req.params;
+        const user = req.user;
 
         const [request] = await db.query(
             `SELECT r.*, f.full_name AS farmer_name, 
-                    kebele_admin.full_name AS kebele_admin_name,
-                    woreda_admin.full_name AS woreda_admin_name,
-                    zone_admin.full_name AS zone_admin_name,
-                    region_admin.full_name AS region_admin_name,
-                    federal_admin.full_name AS federal_admin_name,
-                    p.name as product_name, p.category as product_category
-             FROM requests r
-             JOIN farmers f ON r.farmer_id = f.id
-             LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
-             LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
-             LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
-             LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
-             LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
-             LEFT JOIN products p ON r.product_id = p.id
-             WHERE r.id = ?`, [id] // Removed farmer_id check for admin access
+              kebele_admin.full_name AS kebele_admin_name,
+              woreda_admin.full_name AS woreda_admin_name,
+              zone_admin.full_name AS zone_admin_name,
+              region_admin.full_name AS region_admin_name,
+              federal_admin.full_name AS federal_admin_name,
+              p.name as product_name, p.category as product_category
+       FROM requests r
+       JOIN farmers f ON r.farmer_id = f.id
+       LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
+       LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
+       LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
+       LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
+       LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
+       LEFT JOIN products p ON r.product_id = p.id
+       WHERE r.id = ?`, [id]
         );
 
         if (request.length === 0) {
             return res.status(404).json({ message: 'Request not found' });
+        }
+
+        // Update the status to show the role-specific status
+        if (user.role !== 'Farmer') {
+            request[0].status = determineStatusForAdmin(request[0], user.role);
         }
 
         res.json(request[0]);
@@ -299,6 +455,7 @@ exports.getRequestStatusDetail = async(req, res) => {
         });
     }
 };
+
 exports.listRequestsWithStatus = async(req, res) => {
     try {
         const admin = req.user;
@@ -321,29 +478,34 @@ exports.listRequestsWithStatus = async(req, res) => {
 
         const [requests] = await db.query(
             `SELECT r.id, r.farmer_id, r.product_id, r.quantity, r.status, 
-                    r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status,
-                    r.kebele_feedback, r.woreda_feedback, r.zone_feedback, r.region_feedback, r.federal_feedback,
-                    r.kebele_approved_at, r.woreda_approved_at, r.zone_approved_at, r.region_approved_at, r.federal_approved_at,
-                    r.region_name, r.zone_name, r.woreda_name, r.kebele_name,
-                    f.full_name AS farmer_name, f.phone_number AS farmer_phone,
-                    kebele_admin.full_name AS kebele_admin_name,
-                    woreda_admin.full_name AS woreda_admin_name,
-                    zone_admin.full_name AS zone_admin_name,
-                    region_admin.full_name AS region_admin_name,
-                    federal_admin.full_name AS federal_admin_name,
-                    p.name as product_name, p.category as product_category, p.amount as product_amount
-             FROM requests r
-             JOIN farmers f ON r.farmer_id = f.id
-             LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
-             LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
-             LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
-             LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
-             LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
-             LEFT JOIN products p ON r.product_id = p.id
-             WHERE ${where}
-             ORDER BY r.created_at DESC`,
+              r.kebele_status, r.woreda_status, r.zone_status, r.region_status, r.federal_status,
+              r.kebele_feedback, r.woreda_feedback, r.zone_feedback, r.region_feedback, r.federal_feedback,
+              r.kebele_approved_at, r.woreda_approved_at, r.zone_approved_at, r.region_approved_at, r.federal_approved_at,
+              r.region_name, r.zone_name, r.woreda_name, r.kebele_name,
+              f.full_name AS farmer_name, f.phone_number AS farmer_phone,
+              kebele_admin.full_name AS kebele_admin_name,
+              woreda_admin.full_name AS woreda_admin_name,
+              zone_admin.full_name AS zone_admin_name,
+              region_admin.full_name AS region_admin_name,
+              federal_admin.full_name AS federal_admin_name,
+              p.name as product_name, p.category as product_category, p.amount as product_amount
+       FROM requests r
+       JOIN farmers f ON r.farmer_id = f.id
+       LEFT JOIN admins kebele_admin ON r.kebele_admin_id = kebele_admin.id
+       LEFT JOIN admins woreda_admin ON r.woreda_admin_id = woreda_admin.id
+       LEFT JOIN admins zone_admin ON r.zone_admin_id = zone_admin.id
+       LEFT JOIN admins region_admin ON r.region_admin_id = region_admin.id
+       LEFT JOIN admins federal_admin ON r.federal_admin_id = federal_admin.id
+       LEFT JOIN products p ON r.product_id = p.id
+       WHERE ${where}
+       ORDER BY r.created_at DESC`,
             params
         );
+
+        // Update the status to show the role-specific status
+        requests.forEach(request => {
+            request.status = determineStatusForAdmin(request, admin.role);
+        });
 
         res.json(requests);
     } catch (err) {

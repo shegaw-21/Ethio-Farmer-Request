@@ -24,5 +24,8 @@ router.get('/request/:id/status', authenticate, farmerController.getRequestStatu
 // Delivery confirmation - FIXED: Added authenticate middleware
 router.post('/requests/:id/confirm-delivery', authenticate, farmerController.confirmDelivery);
 router.get('/deliveries', authenticate, farmerController.listMyDeliveries);
-
+// Add this route
+router.get('/check_availability', authenticate, farmerController.checkProductAvailability);
+// Add this route
+router.get('/requests/filter', authenticate, farmerController.listMyRequestsByStatus);
 module.exports = router;
