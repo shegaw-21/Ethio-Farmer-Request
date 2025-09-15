@@ -37,20 +37,12 @@ db.getConnection((err, connection) => {
 // Routes
 const adminRoutes = require('./routes/adminRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
-// const productRoutes = require('./routes/productRoutes');
-// const requestRoutes = require('./routes/requestRoutes');
-// const approvalRoutes = require('./routes/approvalRoutes');
-// const auditRoutes = require('./routes/auditRoutes');
 const approvalWorkflowRoutes = require('./routes/approvalWorkflowRoutes');
 
 
 app.use('/api/admins', adminRoutes);
 app.use('/api/admins', approvalWorkflowRoutes);
 app.use('/api/farmers', farmerRoutes);
-// app.use('/api/products', productRoutes);
-// app.use('/api/requests', requestRoutes);
-// app.use('/api/approvals', approvalRoutes);
-// app.use('/api/audits', auditRoutes);
 
 // Default 404 handler
 app.use((req, res) => {

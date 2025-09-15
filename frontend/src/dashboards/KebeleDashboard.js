@@ -313,6 +313,7 @@ const KebeleDashboard = () => {
                     fullName: farmerForm.fullName,
                     phoneNumber: farmerForm.phoneNumber,
                     password: farmerForm.password,
+                    confirmPassword: farmerForm.confirmPassword,
                     role: 'Farmer',
                     region_name: user.region_name,
                     zone_name: user.zone_name,

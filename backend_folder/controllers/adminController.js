@@ -47,24 +47,49 @@ const helpers = {
         return (RANK[targetRole] || -1) < (RANK[creatorRole] || 0);
     },
 
-    ensureUniquePerScope: async({ role, region_name, zone_name, woreda_name, kebele_name }) => {
+    ensureUniquePerScope: async({ role, region_name, zone_name, woreda_name, kebele_name }, excludeId = null) => {
         let sql = '';
         let params = [];
 
         if (role === 'Federal') {
-            sql = 'SELECT id FROM admins WHERE role="Federal" LIMIT 1';
+            sql = 'SELECT id FROM admins WHERE role="Federal"';
+            if (excludeId) {
+                sql += ' AND id != ?';
+                params.push(excludeId);
+            }
+            sql += ' LIMIT 1';
         } else if (role === 'Region') {
-            sql = 'SELECT id FROM admins WHERE role="Region" AND region_name=? LIMIT 1';
+            sql = 'SELECT id FROM admins WHERE role="Region" AND region_name=?';
             params = [region_name];
+            if (excludeId) {
+                sql += ' AND id != ?';
+                params.push(excludeId);
+            }
+            sql += ' LIMIT 1';
         } else if (role === 'Zone') {
-            sql = 'SELECT id FROM admins WHERE role="Zone" AND region_name=? AND zone_name=? LIMIT 1';
+            sql = 'SELECT id FROM admins WHERE role="Zone" AND region_name=? AND zone_name=?';
             params = [region_name, zone_name];
+            if (excludeId) {
+                sql += ' AND id != ?';
+                params.push(excludeId);
+            }
+            sql += ' LIMIT 1';
         } else if (role === 'Woreda') {
-            sql = 'SELECT id FROM admins WHERE role="Woreda" AND region_name=? AND zone_name=? AND woreda_name=? LIMIT 1';
+            sql = 'SELECT id FROM admins WHERE role="Woreda" AND region_name=? AND zone_name=? AND woreda_name=?';
             params = [region_name, zone_name, woreda_name];
+            if (excludeId) {
+                sql += ' AND id != ?';
+                params.push(excludeId);
+            }
+            sql += ' LIMIT 1';
         } else if (role === 'Kebele') {
-            sql = 'SELECT id FROM admins WHERE role="Kebele" AND region_name=? AND zone_name=? AND woreda_name=? AND kebele_name=? LIMIT 1';
+            sql = 'SELECT id FROM admins WHERE role="Kebele" AND region_name=? AND zone_name=? AND woreda_name=? AND kebele_name=?';
             params = [region_name, zone_name, woreda_name, kebele_name];
+            if (excludeId) {
+                sql += ' AND id != ?';
+                params.push(excludeId);
+            }
+            sql += ' LIMIT 1';
         }
 
         if (sql) {
@@ -209,6 +234,7 @@ const adminManagement = {
             fullName,
             phoneNumber,
             password,
+            confirmPassword, // Add password confirmation
             role,
             region_name,
             zone_name,
@@ -238,13 +264,24 @@ const adminManagement = {
                 return res.status(403).json({ message: `A ${creator.role} can only create a ${expectedRole} account` });
             }
 
-            // Location validation
+            // Password validation
+            if (!password || !confirmPassword) {
+                return res.status(400).json({ message: 'Password and confirmation are required' });
+            }
+            if (password !== confirmPassword) {
+                return res.status(400).json({ message: 'Password and confirmation do not match' });
+            }
+            if (password.length < 6) {
+                return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+            }
+
+            // Location validation - Only require the lowest level location field
             const requiredFields = {
-                Region: ['region_name'],
-                Zone: ['region_name', 'zone_name'],
-                Woreda: ['region_name', 'zone_name', 'woreda_name'],
-                Kebele: ['region_name', 'zone_name', 'woreda_name', 'kebele_name'],
-                Farmer: ['region_name', 'zone_name', 'woreda_name', 'kebele_name']
+                Region: creator.role === 'Federal' ? ['region_name'] : [], // Federal creating Region requires region_name
+                Zone: ['zone_name'], // Region creates Zone - only zone_name required
+                Woreda: ['woreda_name'], // Zone creates Woreda - only woreda_name required
+                Kebele: ['kebele_name'], // Woreda creates Kebele - only kebele_name required
+                Farmer: ['kebele_name'] // Kebele creates Farmer - only kebele_name required
             };
 
             if (requiredFields[role]) {
@@ -256,8 +293,38 @@ const adminManagement = {
                 }
             }
 
+            // Build target location based on creator's scope and provided fields
+            const targetLoc = {
+                region_name: creator.region_name || region_name,
+                zone_name: creator.zone_name || zone_name,
+                woreda_name: creator.woreda_name || woreda_name,
+                kebele_name: kebele_name
+            };
+
+            // For non-Federal creators, inherit higher-level location from creator
+            if (creator.role !== 'Federal') {
+                targetLoc.region_name = creator.region_name;
+
+                if (creator.role !== 'Region') {
+                    targetLoc.zone_name = creator.zone_name;
+
+                    if (creator.role !== 'Zone') {
+                        targetLoc.woreda_name = creator.woreda_name;
+
+                        if (creator.role !== 'Woreda') {
+                            targetLoc.kebele_name = creator.kebele_name;
+                        }
+                    }
+                }
+            }
+
+            // Override with provided values if they exist
+            if (region_name) targetLoc.region_name = region_name;
+            if (zone_name) targetLoc.zone_name = zone_name;
+            if (woreda_name) targetLoc.woreda_name = woreda_name;
+            if (kebele_name) targetLoc.kebele_name = kebele_name;
+
             // Scope validation
-            const targetLoc = { region_name, zone_name, woreda_name, kebele_name };
             if (!helpers.scopeMatches(creator, targetLoc)) {
                 return res.status(403).json({ message: 'Target location must be within your scope' });
             }
@@ -286,7 +353,7 @@ const adminManagement = {
                         created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, [
                         fullName, phoneNumber, password_hash,
-                        region_name, zone_name, woreda_name, kebele_name,
+                        targetLoc.region_name, targetLoc.zone_name, targetLoc.woreda_name, targetLoc.kebele_name,
                         landSizeHectares || null, cropTypes || null, landType || null, cropsSeason || null, farmingExperience || null,
                         irrigationType || null, farmingMethod || null, primaryCrops || null, secondaryCrops || null,
                         soilType || null, hasLivestock || false, livestockTypes || null, annualIncome || null, educationLevel || null
@@ -309,7 +376,7 @@ const adminManagement = {
                 // Insert into admins table
                 const [result] = await db.query(
                     `INSERT INTO admins (full_name, phone_number, password_hash, role, region_name, zone_name, woreda_name, kebele_name, created_at) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`, [fullName, phoneNumber, password_hash, role, region_name, zone_name, woreda_name, kebele_name]
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`, [fullName, phoneNumber, password_hash, role, targetLoc.region_name, targetLoc.zone_name, targetLoc.woreda_name, targetLoc.kebele_name]
                 );
 
                 const [saved] = await db.query('SELECT * FROM admins WHERE id=?', [result.insertId]);
@@ -324,7 +391,6 @@ const adminManagement = {
             return res.status(500).json({ message: err.message || 'Server error' });
         }
     },
-
     listInScope: async(req, res) => {
         try {
             const myRank = RANK[req.user.role] || 0;
@@ -514,7 +580,7 @@ const adminManagement = {
             // Check uniqueness if location changed (only for admins, not farmers)
             if (!isFarmer && (region_name !== undefined || zone_name !== undefined ||
                     woreda_name !== undefined || kebele_name !== undefined)) {
-                await helpers.ensureUniquePerScope(newVals);
+                await helpers.ensureUniquePerScope(newVals, id);
             }
 
             // Check phone uniqueness if changed
@@ -1223,7 +1289,8 @@ const requestManagement = { // ====== List requests in admin's scope ======
 };
 
 // NEW: Helper function to check if admin can modify a request
-function canAdminModifyRequest(admin, request) {
+function
+canAdminModifyRequest(admin, request) {
     const adminRole = admin.role;
     const adminRank = RANK[adminRole] || 0;
 
