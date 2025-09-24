@@ -14,8 +14,8 @@ Farmers can request agricultural products, and administrators at different level
 
 
 
- Features
-Farmers
+**** Features
+****Farmers**
 
 Register & log in with secure password hashing (bcrypt) and JWT authentication.
 
@@ -27,8 +27,8 @@ Update or delete requests if still pending.
 
 View assigned products and confirm delivery once accepted.
 
-🛠️ Administrators
-
+**Administrators
+**
 Hierarchical roles: Federal → Region → Zone → Woreda → Kebele.
 
 Role-based permissions to create, update, and manage lower-level accounts.
@@ -39,7 +39,7 @@ Approve, reject, or accept farmer requests within their jurisdiction.
 
 Full audit of requests and farmer profiles in their scope.
 
- Security
+ **Security**
 
 JWT-based authentication with 12h expiry.
 
@@ -48,8 +48,8 @@ Rate limiting & failed login attempt tracking.
 Role-based access control (RBAC) and scope validation.
 
 SQL constraints and transactions to ensure data consistency.
-Tech Stack
-
+**Tech Stack
+**
 Backend: Node.js, Express.js
 
 Database: MySQL (optimized with indexes, constraints, and transactions)
@@ -60,12 +60,12 @@ Frontend: React + Tailwind CSS (trying to deploy on Vercel)
 
 Weekly Internship Report final …
 Deployment:Trying to deploy Render (backend), Vercel (frontend)
-Install dependencies:
-npm install
+**Install dependencies:
+**npm install
 Run the server:
 npm start
-API Overview
-Farmer Routes
+**API Overview
+**Farmer Routes
 
 POST /farmer/login – Login as farmer
 
@@ -76,8 +76,8 @@ GET /farmer/requests – View all my requests
 PUT /farmer/requests/:id – Update my request
 
 DELETE /farmer/requests/:id – Delete my request
-Admin Routes
-
+**Admin Routes
+**
 POST /admin/login – Admin login
 
 POST /admin/create – Create lower-level admin or farmer
@@ -89,8 +89,9 @@ PUT /admin/requests/:id/status – Update request status
 POST /admin/products – Add new product
 
 GET /admin/products – List products
-Future Improvements
 
+**Future Improvements
+**
 Real-time notifications (WebSockets).
 
 Multi-language support (Amharic + English).
