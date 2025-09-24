@@ -31,7 +31,10 @@ const ZoneDashboard = () => {
             category: '',
             amount: '',
             price: '',
-            description: ''
+            description: '',
+            sub_category: '',
+            unit: '',
+            expiry_date: ''
         });
         const [productError, setProductError] = useState('');
 
@@ -281,6 +284,7 @@ const ZoneDashboard = () => {
                     fullName: woredaForm.fullName,
                     phoneNumber: woredaForm.phoneNumber,
                     password: woredaForm.password,
+                    confirmPassword: woredaForm.confirmPassword,
                     role: 'Woreda',
                     region_name: user.region_name,
                     zone_name: user.zone_name,
@@ -371,7 +375,7 @@ const ZoneDashboard = () => {
                 if (response.ok) {
                     setShowProductForm(false);
                     setEditingProduct(null);
-                    setProductForm({ name: '', category: '', amount: '', price: '', description: '' });
+                    setProductForm({ name: '', category: '', amount: '', price: '', description: '', sub_category: '', unit: '', expiry_date: '' });
                     fetchDashboardData();
                     alert(editingProduct ? 'Product updated successfully' : 'Product added successfully');
                 } else {
@@ -424,7 +428,10 @@ const ZoneDashboard = () => {
                 category: product.category || '',
                 amount: product.amount || '',
                 price: product.price || '',
-                description: product.description || ''
+                description: product.description || '',
+                sub_category: product.sub_category || '',
+                unit: product.unit || '',
+                expiry_date: product.expiry_date ? product.expiry_date.split('T')[0] : ''
             });
             setShowProductForm(true);
         };
@@ -537,8 +544,8 @@ const ZoneDashboard = () => {
             /h2> <
             span className = "text-base font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full" >
             Total: { farmers.length } <
-            /span> <
-            /div>
+            /span> < /
+            div >
 
             { /* Farmers List */ } <
             div className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" > {
@@ -559,8 +566,8 @@ const ZoneDashboard = () => {
                         <
                         p className = "text-xs text-gray-500 dark:text-gray-400" >
                         Registered: { new Date(farmer.created_at).toLocaleDateString() } <
-                        /p> <
-                        /div> <
+                        /p> < /
+                        div > <
                         /div>
                     ))
                 ) : ( <
@@ -568,8 +575,8 @@ const ZoneDashboard = () => {
                     /div>
                 )
             } <
-            /div> <
-            /div>
+            /div> < /
+            div >
         );
 
         const renderReports = () => ( <
@@ -649,7 +656,7 @@ const ZoneDashboard = () => {
         )
     } <
     /div> < /
-    div >
+div >
 );
 
 const getLevelStatus = (level, request) => {
@@ -1224,6 +1231,46 @@ div > <
         value = { productForm.price }
         onChange = {
             (e) => setProductForm({...productForm, price: e.target.value })
+        }
+        className = "w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+        required /
+        >
+        <
+        /div> <
+        div className = "mb-4" >
+        <
+        label className = "block text-gray-700 dark:text-gray-300 mb-2" > Sub Category * < /label> <
+        input type = "text"
+        value = { productForm.sub_category }
+        onChange = {
+            (e) => setProductForm({...productForm, sub_category: e.target.value })
+        }
+        className = "w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+        required /
+        >
+        <
+        /div> <
+        div className = "mb-4" >
+        <
+        label className = "block text-gray-700 dark:text-gray-300 mb-2" > Unit * < /label> <
+        input type = "text"
+        value = { productForm.unit }
+        onChange = {
+            (e) => setProductForm({...productForm, unit: e.target.value })
+        }
+        className = "w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+        placeholder = "e.g., kg, liter, piece"
+        required /
+        >
+        <
+        /div> <
+        div className = "mb-4" >
+        <
+        label className = "block text-gray-700 dark:text-gray-300 mb-2" > Expiry Date * < /label> <
+        input type = "date"
+        value = { productForm.expiry_date }
+        onChange = {
+            (e) => setProductForm({...productForm, expiry_date: e.target.value })
         }
         className = "w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
         required /

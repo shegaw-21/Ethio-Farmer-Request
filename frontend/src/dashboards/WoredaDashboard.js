@@ -506,30 +506,6 @@ const WoredaDashboard = () => {
         setShowFarmerModal(true);
     };
 
-    const handleDeleteAdmin = async(adminId) => {
-        if (window.confirm('Are you sure you want to delete this admin?')) {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`http://localhost:5000/api/admins/edit/${adminId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    fetchDashboardData();
-                    alert('Admin deleted successfully');
-                } else {
-                    const errorData = await response.json();
-                    alert(errorData.message || 'Error deleting admin');
-                }
-            } catch (error) {
-                console.error('Error deleting admin:', error);
-                alert('Error deleting admin');
-            }
-        }
-    };
 
     // Product Management Functions
     const validateProductForm = () => {
@@ -1102,11 +1078,6 @@ const WoredaDashboard = () => {
                             () => handleEditAdmin(admin)
                         }
                         className = "bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded text-sm" > ✏️Edit <
-                        /button> <
-                        button onClick = {
-                            () => handleDeleteAdmin(admin.id)
-                        }
-                        className = "bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm" > 🗑️Delete <
                         /button> < /
                         div > <
                         /div>
@@ -1796,8 +1767,7 @@ div > <
         onChange = {
             (e) => setAdminForm({...adminForm, kebele_name: e.target.value })
         }
-        className = "w-full border border-gray-300 rounded p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600"
-        placeholder = "Optional - keep empty to retain current value" /
+        className = "w-full border border-gray-300 rounded p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" /
         >
         <
         /div> <

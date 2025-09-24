@@ -397,31 +397,6 @@ const KebeleDashboard = () => {
         });
         setShowFarmerModal(true);
     };
-
-    const handleDeleteFarmer = async(farmerId) => {
-        if (window.confirm('Are you sure you want to delete this farmer?')) {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`http://localhost:5000/api/admins/kebele/farmer/${farmerId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    fetchDashboardData();
-                    alert('Farmer deleted successfully');
-                } else {
-                    const errorData = await response.json();
-                    alert(errorData.message || 'Error deleting farmer');
-                }
-            } catch (error) {
-                console.error('Error deleting farmer:', error);
-                alert('Error deleting farmer');
-            }
-        }
-    };
     const handleProductSubmit = async(e) => {
         e.preventDefault();
         try {
@@ -940,11 +915,6 @@ const KebeleDashboard = () => {
                                         () => handleEditFarmer(farmer)
                                     }
                                     className = "bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded text-sm dark:bg-blue-600 dark:hover:bg-blue-700" > ✏️Edit <
-                                    /button> <
-                                    button onClick = {
-                                        () => handleDeleteFarmer(farmer.id)
-                                    }
-                                    className = "bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm dark:bg-red-600 dark:hover:bg-red-700" > 🗑️Delete <
                                     /button> < /
                                     div > <
                                     div >

@@ -12,7 +12,7 @@ router.get('/me', authenticate, adminController.me);
 // Admin Management Routes
 router.post('/register', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.createLowerAdmin);
 router.get('/admins', authenticate, adminController.listInScope);
-router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda'), adminController.updateLowerAdmin);
+router.put('/edit/:id', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.updateLowerAdmin);
 router.post('/createfarmer', authenticate, requireRoles('Federal', 'Region', 'Zone', 'Woreda', 'Kebele'), adminController.createLowerAdmin);
 
 // Product Management Routes
