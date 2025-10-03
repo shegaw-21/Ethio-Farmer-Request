@@ -1,29 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    Moon, 
-    Sun, 
-    Package, 
-    Truck, 
-    ShoppingCart, 
-    LogOut, 
-    Plus, 
-    Edit, 
-    Trash2, 
-    Eye, 
+import {
+    Moon,
+    Sun,
+    Package,
+    Truck,
+    ShoppingCart,
+    LogOut,
+    Plus,
+    Edit,
+    Trash2,
+    Eye,
     Check,
     MapPin,
     Calendar,
     User,
-    Building
+    Building,
+    AlertTriangle
 } from 'lucide-react';
 
 const FarmerDashboard = () => {
     const [activeTab, setActiveTab] = useState('requests');
     const [user, setUser] = useState(null);
     const [darkMode, setDarkMode] = useState(false);
-    const [language, setLanguage] = useState('en'); // 'en' for English, 'am' for Amharic
-    const [statusFilter, setStatusFilter] = useState('all'); // Filter for request status
+    const [language, setLanguage] = useState('en');
+    const [statusFilter, setStatusFilter] = useState('all');
     const navigate = useNavigate();
 
     // Request Management State
@@ -40,7 +41,7 @@ const FarmerDashboard = () => {
 
     // Products State
     const [products, setProducts] = useState([]);
-    
+
     // Deliveries State
     const [deliveries, setDeliveries] = useState([]);
     const [showDeliveryModal, setShowDeliveryModal] = useState(false);
@@ -50,36 +51,7 @@ const FarmerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        // Check authentication
-        const token = localStorage.getItem('token');
-        const userData = JSON.parse(localStorage.getItem('user') || 'null');
-        const userType = localStorage.getItem('userType');
-
-        if (!token || userType !== 'Farmer' || !userData) {
-            navigate('/login');
-            return;
-        }
-
-        setUser(userData);
-        fetchDashboardData();
-        
-        // Load preferences
-        const savedDarkMode = localStorage.getItem('darkMode') === 'true';
-        const savedLanguage = localStorage.getItem('language') || 'en';
-        setDarkMode(savedDarkMode);
-        setLanguage(savedLanguage);
-    }, [navigate]);
-
-    useEffect(() => {
-        // Apply dark mode to the entire document
-        if (darkMode) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, [darkMode]);
-
+    // Fetch dashboard data function
     const fetchDashboardData = async() => {
         try {
             setLoading(true);
@@ -135,6 +107,73 @@ const FarmerDashboard = () => {
             setLoading(false);
         }
     };
+
+    // Filter requests function
+    const filterRequestsByStatus = () => {
+        if (statusFilter === 'all') return requests;
+
+        return requests.filter(request => {
+            const levelStatuses = [
+                request.kebele_status,
+                request.woreda_status,
+                request.zone_status,
+                request.region_status,
+                request.federal_status
+            ];
+
+            // Check if any level has rejected the request
+            const hasRejection = levelStatuses.some(status => status === 'Rejected');
+
+            // Check if any level has accepted the request (specifically Accepted)
+            const hasAccepted = levelStatuses.some(status => status === 'Accepted');
+
+            // Check if any level has approved the request (specifically Approved)
+            const hasApproved = levelStatuses.some(status => status === 'Approved');
+
+            // Determine display status based on priority and filter type
+            if (statusFilter === 'rejected') {
+                return hasRejection;
+            } else if (statusFilter === 'accepted') {
+                return hasAccepted && !hasRejection;
+            } else if (statusFilter === 'approved') {
+                return hasApproved && !hasRejection && !hasAccepted;
+            } else if (statusFilter === 'pending') {
+                return !hasRejection && !hasAccepted && !hasApproved;
+            }
+
+            return false;
+        });
+    };
+
+    useEffect(() => {
+        // Check authentication
+        const token = localStorage.getItem('token');
+        const userData = JSON.parse(localStorage.getItem('user') || 'null');
+        const userType = localStorage.getItem('userType');
+
+        if (!token || userType !== 'Farmer' || !userData) {
+            navigate('/login');
+            return;
+        }
+
+        setUser(userData);
+        fetchDashboardData();
+
+        // Load preferences
+        const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+        const savedLanguage = localStorage.getItem('language') || 'en';
+        setDarkMode(savedDarkMode);
+        setLanguage(savedLanguage);
+    }, [navigate]);
+
+    useEffect(() => {
+        // Apply dark mode to the entire document
+        if (darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [darkMode]);
 
     const fetchRequestStatusDetail = async(requestId) => {
         try {
@@ -211,7 +250,13 @@ const FarmerDashboard = () => {
             rejected: 'Rejected',
             filterBy: 'Filter by Status',
             birr: 'Birr',
-            units: 'units'
+            units: 'units',
+            createRequest: 'Create Request',
+            productExpired: 'Product Expired',
+            description: 'Description',
+            unit: 'Unit',
+            admin: 'Added by Admin',
+            role: 'Role'
         },
         am: {
             farmerPortal: 'የገበሬ መግቢያ',
@@ -252,7 +297,13 @@ const FarmerDashboard = () => {
             rejected: 'የተከለከለ',
             filterBy: 'በሁኔታ አጣራ',
             birr: 'ብር',
-            units: 'ክፍሎች'
+            units: 'ክፍሎች',
+            createRequest: 'ጥያቄ ፍጠር',
+            productExpired: 'ምርቱ ጊዜው አልፎበታል',
+            description: 'መግለጫ',
+            unit: 'አሃድ',
+            admin: 'በአስተዳዳሪ የተጨመረ',
+            role: 'ሚና'
         }
     };
 
@@ -260,39 +311,7 @@ const FarmerDashboard = () => {
 
     // Filter requests based on status
     const getFilteredRequests = () => {
-        if (statusFilter === 'all') return requests;
-        
-        return requests.filter(request => {
-            const levelStatuses = [
-                request.kebele_status,
-                request.woreda_status,
-                request.zone_status,
-                request.region_status,
-                request.federal_status
-            ];
-            
-            // Check if any level has rejected the request
-            const hasRejection = levelStatuses.some(status => status === 'Rejected');
-            
-            // Check if any level has accepted the request (specifically Accepted)
-            const hasAccepted = levelStatuses.some(status => status === 'Accepted');
-            
-            // Check if any level has approved the request (specifically Approved)
-            const hasApproved = levelStatuses.some(status => status === 'Approved');
-            
-            // Determine display status based on priority and filter type
-            if (statusFilter === 'rejected') {
-                return hasRejection;
-            } else if (statusFilter === 'accepted') {
-                return hasAccepted && !hasRejection;
-            } else if (statusFilter === 'approved') {
-                return hasApproved && !hasRejection && !hasAccepted;
-            } else if (statusFilter === 'pending') {
-                return !hasRejection && !hasAccepted && !hasApproved;
-            }
-            
-            return false;
-        });
+        return filterRequestsByStatus();
     };
 
     const handleLogout = () => {
@@ -317,6 +336,13 @@ const FarmerDashboard = () => {
 
             if (requestForm.quantity <= 0) {
                 alert('Quantity must be greater than 0');
+                return;
+            }
+
+            // Check if product is expired
+            const selectedProduct = products.find(p => p.id === parseInt(requestForm.product_id));
+            if (selectedProduct && isProductExpired(selectedProduct)) {
+                alert('Cannot request expired product');
                 return;
             }
 
@@ -354,6 +380,14 @@ const FarmerDashboard = () => {
             console.error('Error processing request:', error);
             alert('Error processing request');
         }
+    };
+
+    // Check if product is expired
+    const isProductExpired = (product) => {
+        if (!product.expiry_date) return false;
+        const expiryDate = new Date(product.expiry_date);
+        const today = new Date();
+        return expiryDate < today;
     };
 
     const canEditOrDelete = (request) => {
@@ -474,10 +508,9 @@ const FarmerDashboard = () => {
             'Approved': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-700'
         };
 
-        return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusClasses[status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'}`}>
-                {status}
-            </span>
+        return ( <
+            span className = { `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusClasses[status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'}` } > { status } <
+            /span>
         );
     };
 
@@ -489,710 +522,847 @@ const FarmerDashboard = () => {
 
         const formatLevel = level.charAt(0).toUpperCase() + level.slice(1);
 
-        return (
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-                <div className="flex items-center mb-2">
-                    <Building className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-                    <h4 className="font-semibold text-gray-900 dark:text-white">{formatLevel} Level</h4>
-                </div>
-                <div className="space-y-2">
-                    <div className="flex items-center">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Status:</span>
-                        {getStatusBadge(status)}
-                    </div>
-                    {admin && (
-                        <div className="flex items-center">
-                            <User className="w-3 h-3 mr-1 text-gray-500 dark:text-gray-400" />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Admin:</span>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{admin}</span>
-                        </div>
-                    )}
-                    {feedback && (
-                        <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Feedback:</span>
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{feedback}</p>
-                        </div>
-                    )}
-                    {date && (
-                        <div className="flex items-center">
-                            <Calendar className="w-3 h-3 mr-1 text-gray-500 dark:text-gray-400" />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Date:</span>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{new Date(date).toLocaleString()}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+        return ( <
+            div className = "bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors duration-200" >
+            <
+            div className = "flex items-center mb-2" >
+            <
+            Building className = "w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" / >
+            <
+            h4 className = "font-semibold text-gray-900 dark:text-white" > { formatLevel }
+            Level < /h4> < /
+            div > <
+            div className = "space-y-2" >
+            <
+            div className = "flex items-center" >
+            <
+            span className = "text-sm font-medium text-gray-700 dark:text-gray-300 mr-2" > Status: < /span> { getStatusBadge(status) } < /
+            div > {
+                admin && ( <
+                    div className = "flex items-center" >
+                    <
+                    User className = "w-3 h-3 mr-1 text-gray-500 dark:text-gray-400" / >
+                    <
+                    span className = "text-sm font-medium text-gray-700 dark:text-gray-300 mr-2" > Admin: < /span> <
+                    span className = "text-sm text-gray-600 dark:text-gray-300" > { admin } < /span> < /
+                    div >
+                )
+            } {
+                feedback && ( <
+                    div className = "bg-gray-50 dark:bg-gray-700 p-2 rounded" >
+                    <
+                    span className = "text-sm font-medium text-gray-700 dark:text-gray-300" > Feedback: < /span> <
+                    p className = "text-sm text-gray-600 dark:text-gray-300 mt-1" > { feedback } < /p> < /
+                    div >
+                )
+            } {
+                date && ( <
+                    div className = "flex items-center" >
+                    <
+                    Calendar className = "w-3 h-3 mr-1 text-gray-500 dark:text-gray-400" / >
+                    <
+                    span className = "text-sm font-medium text-gray-700 dark:text-gray-300 mr-2" > Date: < /span> <
+                    span className = "text-sm text-gray-600 dark:text-gray-300" > { new Date(date).toLocaleString() } < /span> < /
+                    div >
+                )
+            } <
+            /div> < /
+            div >
         );
     };
 
+    // Function to create request for a specific product
+    const createRequestForProduct = (product) => {
+        if (isProductExpired(product)) {
+            alert('Cannot request expired product');
+            return;
+        }
+
+        if (product.amount <= 0) {
+            alert('Product is out of stock');
+            return;
+        }
+
+        setRequestForm({
+            product_id: product.id.toString(),
+            quantity: '',
+            note: ''
+        });
+        setEditingRequest(null);
+        setShowRequestModal(true);
+    };
+
     if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-4 text-lg">Loading...</p>
-                </div>
-            </div>
+        return ( <
+            div className = "min-h-screen flex items-center justify-center" >
+            <
+            div className = "text-center" >
+            <
+            div className = "animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto" > < /div> <
+            p className = "mt-4 text-lg" > Loading... < /p> < /
+            div > <
+            /div>
         );
     }
 
     if (error) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center text-red-600">
-                    <p className="text-xl">{error}</p>
-                </div>
-            </div>
+        return ( <
+            div className = "min-h-screen flex items-center justify-center" >
+            <
+            div className = "text-center text-red-600" >
+            <
+            p className = "text-xl" > { error } < /p> < /
+            div > <
+            /div>
         );
     }
 
-    return (
-        <div className={`flex min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-100'}`}>
-            {/* Sidebar */}
-            <div className={`w-64 ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg p-4 flex flex-col`}>
-                <div className="p-6">
-                    <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">{t.farmerPortal}</h2>
+    return ( <
+        div className = { `flex min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-100'}` } > { /* Sidebar */ } <
+        div className = { `w-64 ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg p-4 flex flex-col` } >
+        <
+        div className = "p-6" >
+        <
+        h2 className = "text-xl font-bold mb-6 text-gray-900 dark:text-white" > { t.farmerPortal } < /h2>
 
-                    <nav className="flex-1">
-                        <button 
-                            className={`w-full py-2 px-4 rounded mb-2 text-left ${
+        <
+        nav className = "flex-1" >
+        <
+        button className = { `w-full py-2 px-4 rounded mb-2 text-left ${
                                 activeTab === 'requests' 
                                     ? 'bg-blue-500 text-white' 
                                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            }`}
-                            onClick={() => setActiveTab('requests')}
-                        >
-                            📦 {t.myRequests}
-                        </button>
+                            }` }
+        onClick = {
+            () => setActiveTab('requests')
+        } > 📦{ t.myRequests } <
+        /button>
 
-                        <button 
-                            className={`w-full py-2 px-4 rounded mb-2 text-left ${
+        <
+        button className = { `w-full py-2 px-4 rounded mb-2 text-left ${
                                 activeTab === 'deliveries' 
                                     ? 'bg-blue-500 text-white' 
                                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            }`}
-                            onClick={() => setActiveTab('deliveries')}
-                        >
-                            🚚 {t.myDeliveries}
-                        </button>
+                            }` }
+        onClick = {
+            () => setActiveTab('deliveries')
+        } > 🚚{ t.myDeliveries } <
+        /button>
 
-                        <button 
-                            className={`w-full py-2 px-4 rounded mb-2 text-left ${
+        <
+        button className = { `w-full py-2 px-4 rounded mb-2 text-left ${
                                 activeTab === 'products' 
                                     ? 'bg-blue-500 text-white' 
                                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            }`}
-                            onClick={() => setActiveTab('products')}
-                        >
-                            🛒 {t.availableProducts}
-                        </button>
-                    </nav>
+                            }` }
+        onClick = {
+            () => setActiveTab('products')
+        } > 🛒{ t.availableProducts } <
+        /button> < /
+        nav >
 
-                    <div>
-                        <button 
-                            className="w-full py-2 px-4 rounded mb-2 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
-                            onClick={toggleDarkMode}
-                        >
-                            {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-                        </button>
-                        <button 
-                            className="w-full py-2 px-4 rounded mb-2 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
-                            onClick={toggleLanguage}
-                        >
-                            {language === 'en' ? '🇪🇹 አማርኛ' : '🇺🇸 English'}
-                        </button>
-                        <button
-                            onClick={handleLogout}
-                            className="w-full py-2 px-4 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50"
-                        >
-                            🚪 {t.logout}
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <
+        div >
+        <
+        button className = "w-full py-2 px-4 rounded mb-2 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+        onClick = { toggleDarkMode } > { darkMode ? '☀️ Light Mode' : '🌙 Dark Mode' } <
+        /button> <
+        button className = "w-full py-2 px-4 rounded mb-2 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+        onClick = { toggleLanguage } > { language === 'en' ? '🇪🇹 አማርኛ' : '🇺🇸 English' } <
+        /button> <
+        button onClick = { handleLogout }
+        className = "w-full py-2 px-4 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50" > 🚪{ t.logout } <
+        /button> < /
+        div > <
+        /div> < /
+        div >
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                <header className={`${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm p-4 flex justify-between items-center`}>
-                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                        {t.welcome}, {user?.fullName} ({t.farmerDashboard})
-                    </h1>
-                </header>
+        { /* Main Content */ } <
+        div className = "flex-1 flex flex-col" >
+        <
+        header className = { `${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm p-4 flex justify-between items-center` } >
+        <
+        h1 className = "text-2xl font-semibold text-gray-900 dark:text-white" > { t.welcome }, { user && user.fullName }({ t.farmerDashboard }) <
+        /h1> < /
+        header >
 
-                <main className={`flex-1 p-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-                    {/* Requests Tab */}
-                    {activeTab === 'requests' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t.myRequests}</h2>
-                                    <p className="text-gray-600 dark:text-gray-400">{t.manageRequests}</p>
-                                </div>
-                                <button 
-                                    onClick={() => setShowRequestModal(true)}
-                                    className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        <
+        main className = { `flex-1 p-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}` } > { /* Requests Tab */ } {
+            activeTab === 'requests' && ( <
+                div className = "space-y-6" >
+                <
+                div className = "flex justify-between items-center mb-6" >
+                <
+                div >
+                <
+                h2 className = "text-2xl font-bold text-gray-900 dark:text-white" > { t.myRequests } < /h2> <
+                p className = "text-gray-600 dark:text-gray-400" > { t.manageRequests } < /p> < /
+                div > <
+                button onClick = {
+                    () => setShowRequestModal(true)
+                }
+                className = "flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors" >
+                <
+                Plus size = { 20 }
+                className = "mr-2" / > { t.newRequest } <
+                /button> < /
+                div >
+
+                { /* Status Filter */ } <
+                div className = { `p-4 rounded shadow mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}` } >
+                <
+                div className = "flex items-center gap-4" >
+                <
+                label className = "text-gray-700 dark:text-gray-300 font-medium" > { t.filterBy }: < /label> <
+                select value = { statusFilter }
+                onChange = {
+                    (e) => setStatusFilter(e.target.value)
+                }
+                className = { `p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` } >
+                <
+                option value = "all" > { t.all } < /option> <
+                option value = "pending" > { t.pending } < /option> <
+                option value = "approved" > { t.approved } < /option> <
+                option value = "accepted" > { t.accepted } < /option> <
+                option value = "rejected" > { t.rejected } < /option> < /
+                select > <
+                /div> < /
+                div >
+
+                <
+                div className = "grid gap-4" > {
+                    getFilteredRequests().map((request) => ( <
+                            div key = { request.id }
+                            className = "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300" >
+                            <
+                            div className = "flex justify-between items-start" >
+                            <
+                            div className = "flex-1" >
+                            <
+                            h3 className = "text-lg font-semibold text-gray-900 dark:text-white mb-2" > { request.product_name } <
+                            /h3> <
+                            div className = "grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400" >
+                            <
+                            div className = "flex items-center" >
+                            <
+                            Package className = "w-3 h-3 mr-1 text-gray-500" / >
+                            <
+                            span className = "font-medium mr-1" > { t.category }: < /span> { request.category } < /
+                            div > <
+                            div className = "flex items-center" >
+                            <
+                            span className = "font-medium mr-1" > { t.price }: < /span> { request.price } { t.birr } < /
+                            div > <
+                            div className = "flex items-center" >
+                            <
+                            span className = "font-medium mr-1" > { t.quantity }: < /span> { request.quantity } { request.unit || t.units } < /
+                            div > <
+                            div className = "flex items-center" >
+                            <
+                            Calendar className = "w-3 h-3 mr-1 text-gray-500" / >
+                            <
+                            span className = "font-medium mr-1" > { t.date }: < /span> { new Date(request.created_at).toLocaleDateString() } < /
+                            div > {
+                                request.sub_category && ( <
+                                    div className = "flex items-center" >
+                                    <
+                                    span className = "font-medium mr-1" > { t.subCategory }: < /span> { request.sub_category } < /
+                                    div >
+                                )
+                            } <
+                            /div> {
+                            request.note && ( <
+                                p className = "mt-2 text-sm text-gray-600 dark:text-gray-400" >
+                                <
+                                span className = "font-medium" > Note: < /span> {request.note} < /
+                                p >
+                            )
+                        } <
+                        div className = "mt-3 flex items-center space-x-3" > {
+                            (() => {
+                                const levelStatuses = [
+                                    request.kebele_status,
+                                    request.woreda_status,
+                                    request.zone_status,
+                                    request.region_status,
+                                    request.federal_status
+                                ];
+
+                                // Check if any level has rejected the request
+                                const hasRejection = levelStatuses.some(status => status === 'Rejected');
+
+                                // Check if any level has accepted the request
+                                const hasAccepted = levelStatuses.some(status => status === 'Accepted');
+
+                                // Check if any level has approved the request
+                                const hasApproved = levelStatuses.some(status => status === 'Approved');
+
+                                // Determine display status: Rejected > Accepted > Approved > Original status
+                                let displayStatus;
+                                if (hasRejection) {
+                                    displayStatus = 'Rejected';
+                                } else if (hasAccepted) {
+                                    displayStatus = 'Accepted';
+                                } else if (hasApproved) {
+                                    displayStatus = 'Approved';
+                                } else {
+                                    displayStatus = request.status;
+                                }
+
+                                return getStatusBadge(displayStatus);
+                            })()
+                        } {
+                            request.handled_by_admin && ( <
+                                div className = "flex items-center" >
+                                <
+                                User className = "w-3 h-3 mr-1 text-gray-500" / >
+                                <
+                                span className = "text-sm text-gray-600 dark:text-gray-400" >
+                                Handled by: { request.handled_by_admin } <
+                                /span> < /
+                                div >
+                            )
+                        } <
+                        /div> < /
+                        div >
+
+                        <
+                        div className = "flex flex-col space-y-2 ml-4" >
+                        <
+                        button onClick = {
+                            () => fetchRequestStatusDetail(request.id)
+                        }
+                        className = "flex items-center px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg transition-colors text-sm" >
+                        <
+                        Eye size = { 16 }
+                        className = "mr-1" / > { t.viewDetails } <
+                        /button>
+
+                        {
+                            canConfirmDelivery(request) && ( <
+                                button onClick = {
+                                    () => handleConfirmDelivery(request)
+                                }
+                                className = "flex items-center px-3 py-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-lg transition-colors text-sm" >
+                                <
+                                Check size = { 16 }
+                                className = "mr-1" / > { t.confirmDelivery } <
+                                /button>
+                            )
+                        }
+
+                        {
+                            canEditOrDelete(request) && ( <
                                 >
-                                    <Plus size={20} className="mr-2" />
-                                    {t.newRequest}
-                                </button>
-                            </div>
+                                <
+                                button onClick = {
+                                    () => handleEditRequest(request)
+                                }
+                                className = "flex items-center px-3 py-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/50 rounded-lg transition-colors text-sm" >
+                                <
+                                Edit size = { 16 }
+                                className = "mr-1" / > { t.edit } <
+                                /button> <
+                                button onClick = {
+                                    () => handleDeleteRequest(request.id)
+                                }
+                                className = "flex items-center px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors text-sm" >
+                                <
+                                Trash2 size = { 16 }
+                                className = "mr-1" / > { t.delete } <
+                                /button> < / >
+                            )
+                        } <
+                        /div> < /
+                        div > <
+                        /div>
+                    ))
+            }
 
-                            {/* Status Filter */}
-                            <div className={`p-4 rounded shadow mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                                <div className="flex items-center gap-4">
-                                    <label className="text-gray-700 dark:text-gray-300 font-medium">{t.filterBy}:</label>
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value)}
-                                        className={`p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}`}
-                                    >
-                                        <option value="all">{t.all}</option>
-                                        <option value="pending">{t.pending}</option>
-                                        <option value="approved">{t.approved}</option>
-                                        <option value="accepted">{t.accepted}</option>
-                                        <option value="rejected">{t.rejected}</option>
-                                    </select>
-                                </div>
-                            </div>
+            {
+                getFilteredRequests().length === 0 && ( <
+                    div className = "text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700" >
+                    <
+                    Package size = { 48 }
+                    className = "mx-auto text-gray-400 mb-4" / >
+                    <
+                    p className = "text-gray-600 dark:text-gray-400" > { statusFilter === 'all' ? t.noRequests : language === 'en' ? `No ${statusFilter} requests found.` : `ምንም ${statusFilter === 'pending' ? 'በመጠባበቅ ላይ' : statusFilter === 'approved' ? 'የተፈቀደ' : statusFilter === 'accepted' ? 'የተቀበለ' : 'የተከለከለ'} ጥያቄዎች አልተገኙም` } < /p> < /
+                    div >
+                )
+            } <
+            /div> < /
+            div >
+        )
+    }
 
-                            <div className="grid gap-4">
-                                {getFilteredRequests().map((request) => (
-                                    <div key={request.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                                    {request.product_name}
-                                                </h3>
-                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                                    <div className="flex items-center">
-                                                        <Package className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.category}:</span> {request.category}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.price}:</span> {request.price} {t.birr}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.quantity}:</span> {request.quantity} {request.unit || t.units}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <Calendar className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.date}:</span> {new Date(request.created_at).toLocaleDateString()}
-                                                    </div>
-                                                    {request.sub_category && (
-                                                        <div className="flex items-center">
-                                                            <span className="font-medium mr-1">{t.subCategory}:</span> {request.sub_category}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {request.note && (
-                                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                                                        <span className="font-medium">Note:</span> {request.note}
-                                                    </p>
-                                                )}
-                                                <div className="mt-3 flex items-center space-x-3">
-                                                    {(() => {
-                                                        const levelStatuses = [
-                                                            request.kebele_status,
-                                                            request.woreda_status,
-                                                            request.zone_status,
-                                                            request.region_status,
-                                                            request.federal_status
-                                                        ];
-                                                        
-                                                        // Check if any level has rejected the request
-                                                        const hasRejection = levelStatuses.some(status => status === 'Rejected');
-                                                        
-                                                        // Check if any level has accepted the request
-                                                        const hasAccepted = levelStatuses.some(status => status === 'Accepted');
-                                                        
-                                                        // Check if any level has approved the request
-                                                        const hasApproved = levelStatuses.some(status => status === 'Approved');
-                                                        
-                                                        // Determine display status: Rejected > Accepted > Approved > Original status
-                                                        let displayStatus;
-                                                        if (hasRejection) {
-                                                            displayStatus = 'Rejected';
-                                                        } else if (hasAccepted) {
-                                                            displayStatus = 'Accepted';
-                                                        } else if (hasApproved) {
-                                                            displayStatus = 'Approved';
-                                                        } else {
-                                                            displayStatus = request.status;
-                                                        }
-                                                        
-                                                        return getStatusBadge(displayStatus);
-                                                    })()}
-                                                    {request.handled_by_admin && (
-                                                        <div className="flex items-center">
-                                                            <User className="w-3 h-3 mr-1 text-gray-500" />
-                                                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                                Handled by: {request.handled_by_admin}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+    { /* Deliveries Tab */ } {
+        activeTab === 'deliveries' && ( <
+            div className = "space-y-6" >
+            <
+            div className = "mb-6" >
+            <
+            h2 className = "text-2xl font-bold text-gray-900 dark:text-white" > { t.myDeliveries } < /h2> <
+            p className = "text-gray-600 dark:text-gray-400" > { t.trackDeliveries } < /p> < /
+            div >
 
-                                            <div className="flex flex-col space-y-2 ml-4">
-                                                <button 
-                                                    onClick={() => fetchRequestStatusDetail(request.id)}
-                                                    className="flex items-center px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg transition-colors text-sm"
-                                                >
-                                                    <Eye size={16} className="mr-1" />
-                                                    {t.viewDetails}
-                                                </button>
+            <
+            div className = "grid gap-4" > {
+                deliveries.map((delivery) => ( <
+                        div key = { delivery.id }
+                        className = "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300" >
+                        <
+                        div className = "flex justify-between items-start" >
+                        <
+                        div className = "flex-1" >
+                        <
+                        h3 className = "text-lg font-semibold text-gray-900 dark:text-white mb-2" > { delivery.product_name } <
+                        /h3> <
+                        div className = "grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400" >
+                        <
+                        div className = "flex items-center" >
+                        <
+                        Package className = "w-3 h-3 mr-1 text-gray-500" / >
+                        <
+                        span className = "font-medium mr-1" > { t.category }: < /span> { delivery.category } < /
+                        div > <
+                        div className = "flex items-center" >
+                        <
+                        span className = "font-medium mr-1" > { t.price }: < /span> { delivery.price } { t.birr } < /
+                        div > <
+                        div className = "flex items-center" >
+                        <
+                        span className = "font-medium mr-1" > { t.quantity }: < /span> { delivery.quantity } { delivery.unit || t.units } < /
+                        div > <
+                        div className = "flex items-center" >
+                        <
+                        Calendar className = "w-3 h-3 mr-1 text-gray-500" / >
+                        <
+                        span className = "font-medium mr-1" > { t.date }: < /span> { new Date(delivery.delivery_date).toLocaleDateString() } < /
+                        div > {
+                            delivery.sub_category && ( <
+                                div className = "flex items-center" >
+                                <
+                                span className = "font-medium mr-1" > { t.subCategory }: < /span> { delivery.sub_category } < /
+                                div >
+                            )
+                        } <
+                        /div> {
+                        delivery.delivery_note && ( <
+                            p className = "mt-2 text-sm text-gray-600 dark:text-gray-400" >
+                            <
+                            span className = "font-medium" > Delivery Note: < /span> {delivery.delivery_note} < /
+                            p >
+                        )
+                    } <
+                    div className = "mt-3" > {
+                        getStatusBadge(delivery.delivery_status)
+                    } <
+                    /div> < /
+                    div > <
+                    /div> < /
+                    div >
+                ))
+        }
 
-                                                {canConfirmDelivery(request) && (
-                                                    <button 
-                                                        onClick={() => handleConfirmDelivery(request)}
-                                                        className="flex items-center px-3 py-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-lg transition-colors text-sm"
-                                                    >
-                                                        <Check size={16} className="mr-1" />
-                                                        {t.confirmDelivery}
-                                                    </button>
-                                                )}
+        {
+            deliveries.length === 0 && ( <
+                div className = "text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700" >
+                <
+                Truck size = { 48 }
+                className = "mx-auto text-gray-400 mb-4" / >
+                <
+                p className = "text-gray-600 dark:text-gray-400" > { t.noDeliveries } < /p> < /
+                div >
+            )
+        } <
+        /div> < /
+        div >
+    )
+}
 
-                                                {canEditOrDelete(request) && (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => handleEditRequest(request)}
-                                                            className="flex items-center px-3 py-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/50 rounded-lg transition-colors text-sm"
-                                                        >
-                                                            <Edit size={16} className="mr-1" />
-                                                            {t.edit}
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleDeleteRequest(request.id)}
-                                                            className="flex items-center px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors text-sm"
-                                                        >
-                                                            <Trash2 size={16} className="mr-1" />
-                                                            {t.delete}
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+{ /* Products Tab */ } {
+    activeTab === 'products' && ( <
+        div className = "space-y-6" >
+        <
+        div className = "mb-6" >
+        <
+        h2 className = "text-2xl font-bold text-gray-900 dark:text-white" > { t.availableProducts } < /h2> <
+        p className = "text-gray-600 dark:text-gray-400" > { t.productsAvailable } < /p> < /
+        div >
 
-                                {getFilteredRequests().length === 0 && (
-                                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <Package size={48} className="mx-auto text-gray-400 mb-4" />
-                                        <p className="text-gray-600 dark:text-gray-400">
-                                            {statusFilter === 'all' ? t.noRequests : 
-                                                language === 'en' ? `No ${statusFilter} requests found.` : 
-                                                `ምንም ${statusFilter === 'pending' ? 'በመጠባበቅ ላይ ያሉ' : 
-                                                statusFilter === 'approved' ? 'የተፈቀዱ' : 
-                                                statusFilter === 'accepted' ? 'የተቀበሉ' : 
-                                                statusFilter === 'rejected' ? 'የተከለከሉ' : statusFilter} ጥያቄዎች አልተገኙም።`
-                                            }
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+        <
+        div className = "grid gap-6 md:grid-cols-2 lg:grid-cols-3" > {
+            products.map((product) => {
+                const expired = isProductExpired(product);
+                return ( <
+                    div key = { product.id }
+                    className = { `bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 transition-all duration-300 hover:shadow-md ${
+                                        expired 
+                                            ? 'border-red-500 dark:border-red-600 bg-red-50 dark:bg-red-900/20' 
+                                            : 'border-gray-200 dark:border-gray-700'
+                                    }` } >
+                    <
+                    div className = "p-6" > {
+                        expired && ( <
+                            div className = "flex items-center mb-3 p-2 bg-red-100 dark:bg-red-900/40 rounded-lg" >
+                            <
+                            AlertTriangle className = "w-4 h-4 text-red-600 dark:text-red-400 mr-2" / >
+                            <
+                            span className = "text-sm font-medium text-red-600 dark:text-red-400" > { t.productExpired } < /span> < /
+                            div >
+                        )
+                    }
 
-                    {/* Deliveries Tab */}
-                    {activeTab === 'deliveries' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t.myDeliveries}</h2>
-                                <p className="text-gray-600 dark:text-gray-400">{t.trackDeliveries}</p>
-                            </div>
+                    <
+                    h3 className = { `text-xl font-bold mb-3 ${
+                                            expired 
+                                                ? 'text-red-700 dark:text-red-300' 
+                                                : 'text-gray-900 dark:text-white'
+                                        }` } > { product.name } <
+                    /h3>
 
-                            <div className="grid gap-4">
-                                {deliveries.map((delivery) => (
-                                    <div key={delivery.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                                    {delivery.product_name}
-                                                </h3>
-                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                                    <div className="flex items-center">
-                                                        <Package className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.category}:</span> {delivery.category}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.price}:</span> {delivery.price} {t.birr}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.quantity}:</span> {delivery.quantity} {delivery.unit || t.units}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <Calendar className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.delivered}:</span> {new Date(delivery.delivered_at).toLocaleDateString()}
-                                                    </div>
-                                                    {delivery.sub_category && (
-                                                        <div className="flex items-center">
-                                                            <span className="font-medium mr-1">{t.subCategory}:</span> {delivery.sub_category}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                
-                                                <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                                    <p className="text-sm font-medium text-green-800 dark:text-green-400 mb-1">
-                                                        Accepted by {delivery.accepted_role} Level
-                                                    </p>
-                                                    {delivery.accepted_admin_name && (
-                                                        <p className="text-sm text-green-700 dark:text-green-300">
-                                                            Admin: {delivery.accepted_admin_name}
-                                                        </p>
-                                                    )}
-                                                    {delivery.confirmation_date && (
-                                                        <p className="text-sm text-green-700 dark:text-green-300">
-                                                            Confirmed: {new Date(delivery.confirmation_date).toLocaleString()}
-                                                        </p>
-                                                    )}
-                                                    {delivery.confirmation_note && (
-                                                        <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-                                                            Note: {delivery.confirmation_note}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
+                    <
+                    div className = "space-y-3" >
+                    <
+                    div className = "flex justify-between" >
+                    <
+                    span className = "font-medium text-gray-700 dark:text-gray-300" > { t.category }: < /span> <
+                    span className = "text-gray-900 dark:text-white" > { product.category } < /span> < /
+                    div >
 
-                                            <div className="ml-4">
-                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-300 dark:border-green-700">
-                                                    <Check className="w-3 h-3 mr-1" />
-                                                    Confirmed
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                    {
+                        product.sub_category && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.subCategory }: < /span> <
+                            span className = "text-gray-900 dark:text-white" > { product.sub_category } < /span> < /
+                            div >
+                        )
+                    }
 
-                                {deliveries.length === 0 && (
-                                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <Truck size={48} className="mx-auto text-gray-400 mb-4" />
-                                        <p className="text-gray-600 dark:text-gray-400">{t.noDeliveries}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {
+                        product.price && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.price }: < /span> <
+                            span className = "text-gray-900 dark:text-white" > { product.price } { t.birr } < /span> < /
+                            div >
+                        )
+                    }
 
-                    {/* Products Tab */}
-                    {activeTab === 'products' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t.availableProducts}</h2>
-                                <p className="text-gray-600 dark:text-gray-400">{t.productsAvailable}</p>
-                            </div>
+                    <
+                    div className = "flex justify-between" >
+                    <
+                    span className = "font-medium text-gray-700 dark:text-gray-300" > { t.amount }: < /span> <
+                    span className = { `font-bold ${
+                                                product.amount > 0 
+                                                    ? 'text-green-600 dark:text-green-400' 
+                                                    : 'text-red-600 dark:text-red-400'
+                                            }` } > { product.amount } {
+                        product.unit ? product.unit : t.units
+                    } < /span> < /
+                    div >
 
-                            <div className="grid gap-4">
-                                {products.map((product) => (
-                                    <div key={product.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                                    {product.name}
-                                                </h3>
-                                                <p className="text-gray-600 dark:text-gray-400 mb-4">{product.description}</p>
-                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                                    <div className="flex items-center">
-                                                        <Package className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.category}:</span> {product.category}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.subCategory}:</span> {product.sub_category || 'N/A'}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.amount}:</span> {product.amount} {product.unit || t.units}
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium mr-1">{t.price}:</span> {product.price} {t.birr}
-                                                    </div>
-                                                    {product.manufacturer && (
-                                                        <div className="flex items-center">
-                                                            <Building className="w-3 h-3 mr-1 text-gray-500" />
-                                                            <span className="font-medium mr-1">{t.manufacturer}:</span> {product.manufacturer}
-                                                        </div>
-                                                    )}
-                                                    {product.admin_location && (
-                                                        <div className="flex items-center col-span-2">
-                                                            <MapPin className="w-3 h-3 mr-1 text-gray-500" />
-                                                            <span className="font-medium mr-1">{t.location}:</span> {product.admin_location}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center">
-                                                        <Calendar className="w-3 h-3 mr-1 text-gray-500" />
-                                                        <span className="font-medium mr-1">{t.added}:</span> {new Date(product.created_at).toLocaleDateString()}
-                                                    </div>
-                                                </div>
-                                                {product.expiry_date && (
-                                                    <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
-                                                        <div className="flex items-center text-amber-600 dark:text-amber-400">
-                                                            <Calendar className="w-3 h-3 mr-1" />
-                                                            <span className="text-sm font-medium">{t.expires}:</span>
-                                                            <span className="text-sm ml-1">{new Date(product.expiry_date).toLocaleDateString()}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                    {
+                        product.unit && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.unit }: < /span> <
+                            span className = "text-gray-900 dark:text-white" > { product.unit } < /span> < /
+                            div >
+                        )
+                    }
 
-                                            <div className="ml-4">
-                                                <button 
-                                                    onClick={() => {
-                                                        setRequestForm({
-                                                            product_id: product.id.toString(),
-                                                            quantity: '',
-                                                            note: ''
-                                                        });
-                                                        setEditingRequest(null);
-                                                        setShowRequestModal(true);
-                                                    }}
-                                                    className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                                >
-                                                    <Package size={16} className="mr-2" />
-                                                    {t.requestProduct}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                    {
+                        product.manufacturer && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.manufacturer }: < /span> <
+                            span className = "text-gray-900 dark:text-white" > { product.manufacturer } < /span> < /
+                            div >
+                        )
+                    }
 
-                                {products.length === 0 && (
-                                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <ShoppingCart size={48} className="mx-auto text-gray-400 mb-4" />
-                                        <p className="text-gray-600 dark:text-gray-400">{t.noProducts}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </main>
-            </div>
+                    {
+                        product.expiry_date && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.expires }: < /span> <
+                            span className = { `font-medium ${
+                                                        expired 
+                                                            ? 'text-red-600 dark:text-red-400' 
+                                                            : 'text-gray-900 dark:text-white'
+                                                    }` } > { new Date(product.expiry_date).toLocaleDateString() } < /span> < /
+                            div >
+                        )
+                    }
 
-            {/* Request Modal */}
-            {showRequestModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto">
-                        <div className="p-6">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                                {editingRequest ? t.edit + ' ' + t.newRequest : t.newRequest}
-                            </h3>
-                            <form onSubmit={handleRequestSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        {t.availableProducts}:
-                                    </label>
-                                    <select 
-                                        value={requestForm.product_id}
-                                        onChange={(e) => setRequestForm({...requestForm, product_id: e.target.value})}
-                                        disabled={editingRequest}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        required
-                                    >
-                                        <option value="">{language === 'en' ? 'Select a product' : 'ምርት ይምረጡ'}</option>
-                                        {products.map((product) => (
-                                            <option key={product.id} value={product.id}>
-                                                {product.name} - {product.category} ({product.price} Birr)
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                    <
+                    div className = "flex justify-between" >
+                    <
+                    span className = "font-medium text-gray-700 dark:text-gray-300" > { t.added }: < /span> <
+                    span className = "text-gray-900 dark:text-white" > { new Date(product.created_at).toLocaleDateString() } < /span> < /
+                    div >
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        {t.quantity}:
-                                    </label>
-                                    <input 
-                                        type="number"
-                                        min="1"
-                                        value={requestForm.quantity}
-                                        onChange={(e) => setRequestForm({...requestForm, quantity: e.target.value})}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        required
-                                    />
-                                </div>
+                    {
+                        product.created_by_admin_name && ( <
+                            div className = "flex justify-between" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.admin }: < /span> <
+                            span className = "text-gray-900 dark:text-white" > { product.created_by_admin_name } < /span> < /
+                            div >
+                        )
+                    }
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        {language === 'en' ? 'Note (Optional)' : 'ማስታወሻ (አማራጭ)'}:
-                                    </label>
-                                    <textarea 
-                                        value={requestForm.note}
-                                        onChange={(e) => setRequestForm({...requestForm, note: e.target.value})}
-                                        rows="3"
-                                        placeholder={language === 'en' ? 'Any additional information about your request...' : 'ስለ ጥያቄዎ ተጨማሪ መረጃ...'}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    />
-                                </div>
+                    {
+                        product.description && ( <
+                            div className = "mt-3 pt-3 border-t border-gray-200 dark:border-gray-700" >
+                            <
+                            span className = "font-medium text-gray-700 dark:text-gray-300" > { t.description }: < /span> <
+                            p className = "mt-1 text-sm text-gray-600 dark:text-gray-400" > { product.description } < /p> < /
+                            div >
+                        )
+                    } <
+                    /div>
 
-                                <div className="flex space-x-3 pt-4">
-                                    <button 
-                                        type="submit"
-                                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                    >
-                                        {editingRequest ? (language === 'en' ? 'Update Request' : 'ጥያቄ አዘምን') : (language === 'en' ? 'Create Request' : 'ጥያቄ ፍጠር')}
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            setShowRequestModal(false);
-                                            setEditingRequest(null);
-                                            setRequestForm({ product_id: '', quantity: '', note: '' });
-                                        }}
-                                        className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    <
+                    div className = "mt-4 pt-4 border-t border-gray-200 dark:border-gray-700" >
+                    <
+                    button onClick = {
+                        () => createRequestForProduct(product)
+                    }
+                    disabled = { expired || product.amount <= 0 }
+                    className = { `w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                                                expired || product.amount <= 0
+                                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                            }` } > { t.createRequest } <
+                    /button> < /
+                    div > <
+                    /div> < /
+                    div >
+                );
+            })
+        } <
+        /div>
 
-            {/* Status Detail Modal */}
-            {showStatusModal && selectedRequest && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-                        <div className="p-6">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">{language === 'en' ? 'Request Status Details' : 'የጥያቄ ሁኔታ ዝርዝሮች'}</h3>
-                            
-                            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <div className="flex items-center mb-3">
-                                    <h4 className="font-semibold text-gray-900 dark:text-white mr-3">{language === 'en' ? 'Overall Status' : 'አጠቃላይ ሁኔታ'}:</h4>
-                                    {(() => {
-                                        const levelStatuses = [
-                                            selectedRequest.kebele_status,
-                                            selectedRequest.woreda_status,
-                                            selectedRequest.zone_status,
-                                            selectedRequest.region_status,
-                                            selectedRequest.federal_status
-                                        ];
-                                        
-                                        // Check if any level has rejected the request
-                                        const hasRejection = levelStatuses.some(status => status === 'Rejected');
-                                        
-                                        // Check if any level has accepted the request
-                                        const hasAccepted = levelStatuses.some(status => status === 'Accepted');
-                                        
-                                        // Check if any level has approved the request
-                                        const hasApproved = levelStatuses.some(status => status === 'Approved');
-                                        
-                                        // Determine display status: Rejected > Accepted > Approved > Original status
-                                        let displayStatus;
-                                        if (hasRejection) {
-                                            displayStatus = 'Rejected';
-                                        } else if (hasAccepted) {
-                                            displayStatus = 'Accepted';
-                                        } else if (hasApproved) {
-                                            displayStatus = 'Approved';
-                                        } else {
-                                            displayStatus = selectedRequest.status;
-                                        }
-                                        
-                                        return getStatusBadge(displayStatus);
-                                    })()}
-                                </div>
-                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                    <div className="flex items-center">
-                                        <Package className="w-3 h-3 mr-1 text-gray-500" />
-                                        <span className="font-medium mr-1">Product:</span> {selectedRequest.product_name}
-                                    </div>
-                                    <div className="flex items-center">
-                                        <span className="font-medium mr-1">Quantity:</span> {selectedRequest.quantity} {selectedRequest.unit || 'units'}
-                                    </div>
-                                    <div className="flex items-center">
-                                        <span className="font-medium mr-1">Price:</span> {selectedRequest.price} Birr
-                                    </div>
-                                </div>
-                                {selectedRequest.note && (
-                                    <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                                        <span className="text-sm font-medium text-blue-800 dark:text-blue-300">Note:</span>
-                                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{selectedRequest.note}</p>
-                                    </div>
-                                )}
-                            </div>
+        {
+            products.length === 0 && ( <
+                div className = "text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700" >
+                <
+                ShoppingCart size = { 48 }
+                className = "mx-auto text-gray-400 mb-4" / >
+                <
+                p className = "text-gray-600 dark:text-gray-400" > { t.noProducts } < /p> < /
+                div >
+            )
+        } <
+        /div>
+    )
+} <
+/main> < /
+div >
 
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-gray-900 dark:text-white">{language === 'en' ? 'Approval Levels' : 'የፈቃድ ደረጃዎች'}:</h4>
-                                <div className="grid gap-4">
-                                    {getLevelStatus('kebele', selectedRequest)}
-                                    {getLevelStatus('woreda', selectedRequest)}
-                                    {getLevelStatus('zone', selectedRequest)}
-                                    {getLevelStatus('region', selectedRequest)}
-                                    {getLevelStatus('federal', selectedRequest)}
-                                </div>
-                            </div>
+    { /* Request Modal */ } {
+        showRequestModal && ( <
+                div className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" >
+                <
+                div className = { `w-full max-w-md rounded-lg shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6` } >
+                <
+                h3 className = "text-xl font-bold mb-4 text-gray-900 dark:text-white" > { editingRequest ? t.edit : t.newRequest } < /h3> <
+                form onSubmit = { handleRequestSubmit } >
+                <
+                div className = "space-y-4" >
+                <
+                div >
+                <
+                label className = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" > { t.category } < /label> <
+                select value = { requestForm.product_id }
+                onChange = {
+                    (e) => setRequestForm({...requestForm, product_id: e.target.value })
+                }
+                className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+                required >
+                <
+                option value = "" > { t.selectProduct } < /option> {
+                products.filter(product => !isProductExpired(product) && product.amount > 0).map(product => ( <
+                    option key = { product.id }
+                    value = { product.id } > { product.name } - { product.category } - { product.price } { t.birr } <
+                    /option>
+                ))
+            } <
+            /select> < /
+        div >
 
-                            <div className="flex justify-end pt-6">
-                                <button 
-                                    onClick={() => {
-                                        setShowStatusModal(false);
-                                        setSelectedRequest(null);
-                                    }}
-                                    className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-                                >
-                                    {language === 'en' ? 'Close' : 'ዝጋ'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <
+            div >
+            <
+            label className = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" > { t.quantity } < /label> <
+        input type = "number"
+        value = { requestForm.quantity }
+        onChange = {
+            (e) => setRequestForm({...requestForm, quantity: e.target.value })
+        }
+        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+        min = "1"
+        required /
+            >
+            <
+            /div>
 
-            {/* Delivery Confirmation Modal */}
-            {showDeliveryModal && confirmingDelivery && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-                        <div className="p-6">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{t.confirmDelivery}</h3>
-                            
-                            <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                <p className="font-medium text-green-800 dark:text-green-400">
-                                    {language === 'en' ? 'Product' : 'ምርት'}: {confirmingDelivery.product_name}
-                                </p>
-                                <p className="text-sm text-green-700 dark:text-green-300">
-                                    {t.quantity}: {confirmingDelivery.quantity}
-                                </p>
-                            </div>
+        <
+        div >
+            <
+            label className = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" > Note(Optional) < /label> <
+        textarea value = { requestForm.note }
+        onChange = {
+            (e) => setRequestForm({...requestForm, note: e.target.value })
+        }
+        rows = "3"
+        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+        /> < /
+        div > <
+            /div>
 
-                            <form onSubmit={submitDeliveryConfirmation} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        {language === 'en' ? 'Confirmation Note (Optional)' : 'የማረጋገጫ ማስታወሻ (አማራጭ)'}:
-                                    </label>
-                                    <textarea 
-                                        value={deliveryNote}
-                                        onChange={(e) => setDeliveryNote(e.target.value)}
-                                        rows="3"
-                                        placeholder={language === 'en' ? 'Any notes about the delivery...' : 'ስለ መላኪያው ማስታወሻ...'}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    />
-                                </div>
+        <
+        div className = "flex justify-end space-x-3 mt-6" >
+            <
+            button type = "button"
+        onClick = {
+            () => {
+                setShowRequestModal(false);
+                setEditingRequest(null);
+                setRequestForm({ product_id: '', quantity: '', note: '' });
+            }
+        }
+        className = "px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200" >
+            Cancel <
+            /button> <
+        button type = "submit"
+        className = "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors" > { editingRequest ? t.update : t.submit } <
+            /button> < /
+        div > <
+            /form> < /
+        div > <
+            /div>
+    )
+}
 
-                                <div className="flex space-x-3">
-                                    <button 
-                                        type="submit"
-                                        className="flex-1 flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                                    >
-                                        <Check size={16} className="mr-2" />
-                                        {t.confirmDelivery}
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            setShowDeliveryModal(false);
-                                            setConfirmingDelivery(null);
-                                            setDeliveryNote('');
-                                        }}
-                                        className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+{ /* Status Detail Modal */ } {
+    showStatusModal && selectedRequest && ( <
+            div className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" >
+            <
+            div className = { `w-full max-w-2xl rounded-lg shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 max-h-[90vh] overflow-y-auto` } >
+            <
+            div className = "flex justify-between items-center mb-6" >
+            <
+            h3 className = "text-xl font-bold text-gray-900 dark:text-white" > Request Status Details < /h3> <
+            button onClick = {
+                () => setShowStatusModal(false)
+            }
+            className = "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" > ✕ <
+            /button> < /
+            div >
+
+            <
+            div className = "space-y-4" >
+            <
+            div className = "grid grid-cols-2 gap-4 text-sm" >
+            <
+            div >
+            <
+            span className = "font-medium text-gray-700 dark:text-gray-300" > Product: < /span> <
+            span className = "ml-2 text-gray-900 dark:text-white" > { selectedRequest.product_name } < /span> < /
+            div > <
+            div >
+            <
+            span className = "font-medium text-gray-700 dark:text-gray-300" > Category: < /span> <
+            span className = "ml-2 text-gray-900 dark:text-white" > { selectedRequest.category } < /span> < /
+            div > <
+            div >
+            <
+            span className = "font-medium text-gray-700 dark:text-gray-300" > Quantity: < /span> <
+            span className = "ml-2 text-gray-900 dark:text-white" > { selectedRequest.quantity } < /span> < /
+            div > <
+            div >
+            <
+            span className = "font-medium text-gray-700 dark:text-gray-300" > Requested: < /span> <
+            span className = "ml-2 text-gray-900 dark:text-white" > { new Date(selectedRequest.created_at).toLocaleString() } < /span> < /
+            div > <
+            /div>
+
+            <
+            div className = "space-y-4" >
+            <
+            h4 className = "font-semibold text-gray-900 dark:text-white" > Approval Status by Level < /h4> {
+            getLevelStatus('kebele', selectedRequest)
+        } {
+            getLevelStatus('woreda', selectedRequest)
+        } {
+            getLevelStatus('zone', selectedRequest)
+        } {
+            getLevelStatus('region', selectedRequest)
+        } {
+            getLevelStatus('federal', selectedRequest)
+        } <
+        /div> < /
+    div > <
+        /div> < /
+    div >
+)
+}
+
+{ /* Delivery Confirmation Modal */ } {
+    showDeliveryModal && confirmingDelivery && ( <
+        div className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" >
+        <
+        div className = { `w-full max-w-md rounded-lg shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6` } >
+        <
+        h3 className = "text-xl font-bold mb-4 text-gray-900 dark:text-white" > { t.confirmDelivery } < /h3> <
+        p className = "text-gray-600 dark:text-gray-400 mb-4" >
+        Please confirm that you have received the delivery
+        for { confirmingDelivery.product_name }. <
+        /p> <
+        form onSubmit = { submitDeliveryConfirmation } >
+        <
+        div className = "mb-4" >
+        <
+        label className = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" > Delivery Note(Optional) < /label> <
+        textarea value = { deliveryNote }
+        onChange = {
+            (e) => setDeliveryNote(e.target.value)
+        }
+        rows = "3"
+        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+        placeholder = "Add any notes about the delivery..." /
+        >
+        <
+        /div> <
+        div className = "flex justify-end space-x-3" >
+        <
+        button type = "button"
+        onClick = {
+            () => {
+                setShowDeliveryModal(false);
+                setConfirmingDelivery(null);
+                setDeliveryNote('');
+            }
+        }
+        className = "px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200" >
+        Cancel <
+        /button> <
+        button type = "submit"
+        className = "px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors" >
+        Confirm Delivery <
+        /button> < /
+        div > <
+        /form> < /
+        div > <
+        /div>
+    )
+} <
+/div>
+);
 };
 
 export default FarmerDashboard;
