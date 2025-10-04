@@ -1217,8 +1217,6 @@ const FederalDashboard = () => {
                 <
                 h3 className = "text-lg font-semibold text-gray-900 dark:text-white" > { admin.full_name } < /h3> <
                 p className = "text-gray-600 dark:text-gray-300" > Phone: { admin.phone_number } < /p> <
-                p className = "text-gray-600 dark:text-gray-300" > Phone: { admin.password } < /p> <
-                p className = "text-gray-600 dark:text-gray-300" > Phone: { admin.confirmPassword } < /p> <
 
 
                 p className = "text-gray-600 dark:text-gray-300" > Region: { admin.region_name } < /p> <
@@ -1649,117 +1647,107 @@ div >
 
 { /* Admin Form Modal */ } {
     showAdminForm && ( <
-        div className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" >
+            div className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" >
+            <
+            div className = { `w-full max-w-md p-6 rounded shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}` } >
+            <
+            h2 className = "text-xl font-bold mb-4 text-gray-900 dark:text-white" > { editingAdmin ? 'Edit Region Admin' : 'Add Region Admin' } <
+            /h2> <
+            form onSubmit = { handleAdminSubmit } >
+            <
+            div className = "mb-4" >
+            <
+            label className = "block text-gray-700 dark:text-gray-200 mb-2" > Full Name < /label> <
+            input type = "text"
+            value = { adminForm.fullName }
+            onChange = {
+                (e) => setAdminForm({...adminForm, fullName: e.target.value })
+            }
+            className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+            required /
+            >
+            <
+            /div> <
+            div className = "mb-4" >
+            <
+            label className = "block text-gray-700 dark:text-gray-200 mb-2" > Phone Number < /label> <
+            input type = "tel"
+            value = { adminForm.phoneNumber }
+            onChange = {
+                (e) => setAdminForm({...adminForm, phoneNumber: e.target.value })
+            }
+            className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+            required /
+            >
+            <
+            /div> <
+            div className = "mb-4" >
+            <
+            label className = "block text-gray-700 dark:text-gray-200 mb-2" > Region < /label> <
+            input type = "text"
+            value = { adminForm.region_name }
+            onChange = {
+                (e) => setAdminForm({...adminForm, region_name: e.target.value })
+            }
+            className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+            placeholder = "Enter region name"
+            required /
+            >
+            <
+            /div> <
+            div >
+            <
+            label className = "block mb-1 text-gray-700 dark:text-gray-300" > Password < /label> <
+            input type = "password"
+            value = { adminForm.password }
+            onChange = { e => setAdminForm({...adminForm, password: e.target.value }) }
+            className = { `w-full p-2 rounded border ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300 text-gray-900'}` }
+            placeholder = { editingAdmin ? "Leave blank to keep current password" : "Enter password" }
+            /> < /
+            div > <
+            div >
+            <
+            label className = "block mb-1 text-gray-700 dark:text-gray-300" > Confirm Password < /label> <
+            input type = "password"
+            value = { adminForm.confirmPassword }
+            onChange = { e => setAdminForm({...adminForm, confirmPassword: e.target.value }) }
+            className = { `w-full p-2 rounded border ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
+            placeholder = { editingAdmin ? "Leave blank to keep current password" : "Confirm password" }
+            /> < /
+            div >
+            ( <
+                div className = "mb-4 p-2 bg-red-100 text-red-700 rounded dark:bg-red-900 dark:text-red-300" > { adminError } <
+                /div>
+            )
+        } <
+        div className = "flex justify-end gap-2" >
         <
-        div className = { `w-full max-w-md p-6 rounded shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}` } >
-        <
-        h2 className = "text-xl font-bold mb-4 text-gray-900 dark:text-white" > { editingAdmin ? 'Edit Region Admin' : 'Add Region Admin' } <
-        /h2> <
-        form onSubmit = { handleAdminSubmit } >
-        <
-        div className = "mb-4" >
-        <
-        label className = "block text-gray-700 dark:text-gray-200 mb-2" > Full Name < /label> <
-        input type = "text"
-        value = { adminForm.fullName }
-        onChange = {
-            (e) => setAdminForm({...adminForm, fullName: e.target.value })
+        button type = "button"
+    onClick = {
+        () => {
+            setShowAdminForm(false);
+            setEditingAdmin(null);
+            setAdminForm({
+                fullName: '',
+                phoneNumber: '',
+                password: '',
+                confirmPassword: '',
+                role: 'Region',
+                region_name: ''
+            });
+            setAdminError('');
         }
-        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
-        required /
-        >
-        <
-        /div> <
-        div className = "mb-4" >
-        <
-        label className = "block text-gray-700 dark:text-gray-200 mb-2" > Phone Number < /label> <
-        input type = "tel"
-        value = { adminForm.phoneNumber }
-        onChange = {
-            (e) => setAdminForm({...adminForm, phoneNumber: e.target.value })
-        }
-        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
-        required /
-        >
-        <
-        /div> <
-        div className = "mb-4" >
-        <
-        label className = "block text-gray-700 dark:text-gray-200 mb-2" > Region < /label> <
-        input type = "text"
-        value = { adminForm.region_name }
-        onChange = {
-            (e) => setAdminForm({...adminForm, region_name: e.target.value })
-        }
-        className = { `w-full p-2 rounded ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
-        placeholder = "Enter region name"
-        required /
-        >
-        <
-        /div> {!editingAdmin && ( < >  <
-        div >
-        <
-        label className = "block mb-1 text-gray-700 dark:text-gray-300" >
-        Password {!editingAdmin && '*' } <
-        /label> <
-        input type = "password"
-        required = {!editingAdmin }
-        value = { adminForm.password }
-        onChange = {
-            (e) => setAdminForm({...adminForm, password: e.target.value })
-        }
-        className = { `w-full p-2 rounded border ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300 text-gray-900'}` }
-        /> < /
-        div > <
-        div >
-        <
-        label className = "block mb-1 text-gray-700 dark:text-gray-300" >
-        Confirm Password {!editingAdmin && '*' } <
-        /label> <
-        input type = "password"
-        required = {!editingAdmin }
-        value = { adminForm.confirmPassword }
-        onChange = {
-            (e) => setAdminForm({...adminForm, confirmPassword: e.target.value })
-        }
-        className = { `w-full p-2 rounded border ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border border-gray-300 text-gray-900'}` }
-        /> < /
-        div > < />
-    )
-} {
-    adminError && ( <
-        div className = "mb-4 p-2 bg-red-100 text-red-700 rounded dark:bg-red-900 dark:text-red-300" > { adminError } <
-        /div>
-    )
-} <
-div className = "flex justify-end gap-2" >
-    <
-    button type = "button"
-onClick = {
-    () => {
-        setShowAdminForm(false);
-        setEditingAdmin(null);
-        setAdminForm({
-            fullName: '',
-            phoneNumber: '',
-            password: '',
-            confirmPassword: '',
-            role: 'Region',
-            region_name: ''
-        });
-        setAdminError('');
     }
-}
-className = "px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded dark:bg-gray-600 dark:hover:bg-gray-700" >
-    Cancel <
-    /button> <
-button type = "submit"
-className = "px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded dark:bg-blue-600 dark:hover:bg-blue-700" > { editingAdmin ? 'Update Admin' : 'Add Admin' } <
-    /button> < /
-div > <
-    /form> < /
-div > <
-    /div>
+    className = "px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded dark:bg-gray-600 dark:hover:bg-gray-700" >
+        Cancel <
+        /button> <
+    button type = "submit"
+    className = "px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded dark:bg-blue-600 dark:hover:bg-blue-700" > { editingAdmin ? 'Update Admin' : 'Add Admin' } <
+        /button> < /
+    div > <
+        /form> < /
+    div > <
+        /div>
 )
 }
 

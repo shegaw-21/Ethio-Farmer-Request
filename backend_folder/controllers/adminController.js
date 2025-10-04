@@ -47,7 +47,7 @@ const helpers = {
         return (RANK[targetRole] || -1) < (RANK[creatorRole] || 0);
     },
 
-    ensureUniquePerScope: async({ role, region_name, zone_name, woreda_name, kebele_name }, excludeId = null) => {
+    ensureUniquePerScope: async ({ role, region_name, zone_name, woreda_name, kebele_name }, excludeId = null) => {
         let sql = '';
         let params = [];
 
@@ -101,7 +101,7 @@ const helpers = {
 
 // Authentication
 const auth = {
-    login: async(req, res) => {
+    login: async (req, res) => {
         try {
             const { phoneNumber, password } = req.body;
             if (!phoneNumber || !password) {
@@ -152,7 +152,7 @@ const auth = {
         }
     },
 
-    me: async(req, res) => {
+    me: async (req, res) => {
         try {
             const [rows] = await db.query(
                 `SELECT id, full_name, phone_number, role, region_name, zone_name, woreda_name, kebele_name 
@@ -167,7 +167,7 @@ const auth = {
     },
 
     // NEW: Update federal admin own profile
-    updateFederalProfile: async(req, res) => {
+    updateFederalProfile: async (req, res) => {
         try {
             // Only federal admin can update their own profile
             if (req.user.role !== 'Federal') {
@@ -228,7 +228,7 @@ const auth = {
 
 // Admin Management
 const adminManagement = {
-    createLowerAdmin: async(req, res) => {
+    createLowerAdmin: async (req, res) => {
         const creator = req.user;
         const {
             fullName,
@@ -352,12 +352,12 @@ const adminManagement = {
                         soil_type, has_livestock, livestock_types, annual_income, education_level,
                         created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, [
-                        fullName, phoneNumber, password_hash,
-                        targetLoc.region_name, targetLoc.zone_name, targetLoc.woreda_name, targetLoc.kebele_name,
-                        landSizeHectares || null, cropTypes || null, landType || null, cropsSeason || null, farmingExperience || null,
-                        irrigationType || null, farmingMethod || null, primaryCrops || null, secondaryCrops || null,
-                        soilType || null, hasLivestock || false, livestockTypes || null, annualIncome || null, educationLevel || null
-                    ]
+                    fullName, phoneNumber, password_hash,
+                    targetLoc.region_name, targetLoc.zone_name, targetLoc.woreda_name, targetLoc.kebele_name,
+                    landSizeHectares || null, cropTypes || null, landType || null, cropsSeason || null, farmingExperience || null,
+                    irrigationType || null, farmingMethod || null, primaryCrops || null, secondaryCrops || null,
+                    soilType || null, hasLivestock || false, livestockTypes || null, annualIncome || null, educationLevel || null
+                ]
                 );
 
                 const [saved] = await db.query('SELECT * FROM farmers WHERE id=?', [result.insertId]);
@@ -391,7 +391,7 @@ const adminManagement = {
             return res.status(500).json({ message: err.message || 'Server error' });
         }
     },
-    listInScope: async(req, res) => {
+    listInScope: async (req, res) => {
         try {
             const myRank = RANK[req.user.role] || 0;
             let where = '1=1';
@@ -446,7 +446,7 @@ const adminManagement = {
             return res.status(500).json({ message: 'Server error' });
         }
     },
-    updateLowerAdmin: async(req, res) => {
+    updateLowerAdmin: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
@@ -579,7 +579,7 @@ const adminManagement = {
 
             // Check uniqueness if location changed (only for admins, not farmers)
             if (!isFarmer && (region_name !== undefined || zone_name !== undefined ||
-                    woreda_name !== undefined || kebele_name !== undefined)) {
+                woreda_name !== undefined || kebele_name !== undefined)) {
                 await helpers.ensureUniquePerScope(newVals, id);
             }
 
@@ -719,7 +719,7 @@ const adminManagement = {
         }
     },
     // NEW: Kebele admin update farmer profile
-    updateFarmerProfile: async(req, res) => {
+    updateFarmerProfile: async (req, res) => {
         try {
             const creator = req.user;
             const { id } = req.params;
@@ -858,7 +858,7 @@ const adminManagement = {
 
 // ... rest of your code ...
 const productManagement = {
-    addProduct: async(req, res) => {
+    addProduct: async (req, res) => {
         try {
             const {
                 name,
@@ -900,17 +900,17 @@ const productManagement = {
                     expiry_date,
                     created_by_admin_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-                    name,
-                    category,
-                    sub_category,
-                    price,
-                    amount,
-                    unit || null,
-                    description || null,
-                    manufacturer || null,
-                    expiry_date,
-                    req.user.id
-                ]
+                name,
+                category,
+                sub_category,
+                price,
+                amount,
+                unit || null,
+                description || null,
+                manufacturer || null,
+                expiry_date,
+                req.user.id
+            ]
             );
 
             const [product] = await db.query('SELECT * FROM products WHERE id=?', [result.insertId]);
@@ -924,7 +924,7 @@ const productManagement = {
         }
     },
 
-    listProducts: async(req, res) => {
+    listProducts: async (req, res) => {
         try {
             // All admins can see ALL products with all columns
             const [products] = await db.query(
@@ -946,7 +946,7 @@ const productManagement = {
             return res.status(500).json({ message: 'Server error' });
         }
     },
-    listMyProducts: async(req, res) => {
+    listMyProducts: async (req, res) => {
         try {
             const [products] = await db.query(
                 `SELECT 
@@ -963,7 +963,7 @@ const productManagement = {
             return res.status(500).json({ message: 'Server error' });
         }
     },
-    listOtherAdminsProducts: async(req, res) => {
+    listOtherAdminsProducts: async (req, res) => {
         try {
             const [products] = await db.query(
                 `SELECT 
@@ -984,25 +984,27 @@ const productManagement = {
             console.error('List other admins products error:', err);
             return res.status(500).json({ message: 'Server error' });
         }
-    },
-    updateProduct: async(req, res) => {
+    },updateProduct: async(req, res) => {
         try {
             const { id } = req.params;
             const {
                 name,
                 description,
                 amount,
+                price, // Add price field
                 category,
-                sub_category, // Add this
-                expiry_date // Add this
+                sub_category,
+                unit, // Add unit field
+                manufacturer, // Add manufacturer field
+                expiry_date
             } = req.body;
-
+    
             // Check if product exists and is owned by current admin
             const [rows] = await db.query(
                 'SELECT * FROM products WHERE id=? AND created_by_admin_id=?', [id, req.user.id]
             );
             if (!rows.length) return res.status(404).json({ message: 'Product not found or not owned by you' });
-
+    
             // Validate expiry_date if provided
             if (expiry_date) {
                 const expiryDate = new Date(expiry_date);
@@ -1012,27 +1014,73 @@ const productManagement = {
                     });
                 }
             }
-
+    
+            // Build dynamic update query
+            const updateFields = [];
+            const updateValues = [];
+    
+            if (name !== undefined) {
+                updateFields.push('name = ?');
+                updateValues.push(name);
+            }
+            if (description !== undefined) {
+                updateFields.push('description = ?');
+                updateValues.push(description);
+            }
+            if (amount !== undefined) {
+                updateFields.push('amount = ?');
+                updateValues.push(amount);
+            }
+            if (price !== undefined) {
+                updateFields.push('price = ?');
+                updateValues.push(price);
+            }
+            if (category !== undefined) {
+                updateFields.push('category = ?');
+                updateValues.push(category);
+            }
+            if (sub_category !== undefined) {
+                updateFields.push('sub_category = ?');
+                updateValues.push(sub_category);
+            }
+            if (unit !== undefined) {
+                updateFields.push('unit = ?');
+                updateValues.push(unit);
+            }
+            if (manufacturer !== undefined) {
+                updateFields.push('manufacturer = ?');
+                updateValues.push(manufacturer);
+            }
+            if (expiry_date !== undefined) {
+                updateFields.push('expiry_date = ?');
+                updateValues.push(expiry_date);
+            }
+    
+            // If no fields to update
+            if (updateFields.length === 0) {
+                return res.status(400).json({ message: 'No fields to update' });
+            }
+    
+            updateValues.push(id);
+    
+            // Add this debug line before the update query to see what's being executed
+            console.log('Update query:', `UPDATE products SET ${updateFields.join(', ')} WHERE id=?`);
+            console.log('Update values:', updateValues);
+    
+            // Execute update query
             await db.query(
-                `UPDATE products SET 
-                    name = COALESCE(?, name),
-                    description = COALESCE(?, description),
-                    amount = COALESCE(?, amount),
-                    category = COALESCE(?, category),
-                    sub_category = COALESCE(?, sub_category),  // Add this
-                    expiry_date = COALESCE(?, expiry_date)     // Add this
-                 WHERE id=?`, [name, description, amount, category, sub_category, expiry_date, id]
+                `UPDATE products SET ${updateFields.join(', ')} WHERE id=?`,
+                updateValues
             );
-
+    
             const [updated] = await db.query('SELECT * FROM products WHERE id=?', [id]);
             return res.json({ message: 'Product updated successfully', product: updated[0] });
         } catch (err) {
             console.error('Update product error:', err);
-            return res.status(500).json({ message: 'Server error' });
+            return res.status(500).json({ message: 'Server error: ' + err.message });
         }
     },
-
-    deleteProduct: async(req, res) => {
+    deleteProduct: async (req, res) => {
         try {
             const { id } = req.params;
             const [rows] = await db.query(
@@ -1050,7 +1098,7 @@ const productManagement = {
 };
 // Request Management
 const requestManagement = { // ====== List requests in admin's scope ======
-    listRequests: async(req, res) => {
+    listRequests: async (req, res) => {
         try {
             const admin = req.user;
             let where = '1=1';
@@ -1126,7 +1174,7 @@ const requestManagement = { // ====== List requests in admin's scope ======
             return res.status(500).json({ message: 'Server error: ' + err.message });
         }
     }, // ====== Update request status (with scope validation) ======
-    updateRequestStatus: async(req, res) => {
+    updateRequestStatus: async (req, res) => {
         try {
             const admin = req.user;
             const { id } = req.params;
@@ -1223,7 +1271,7 @@ const requestManagement = { // ====== List requests in admin's scope ======
     },
 
     // NEW: Delete rejected requests
-    deleteRejectedRequest: async(req, res) => {
+    deleteRejectedRequest: async (req, res) => {
         try {
             const admin = req.user;
             const { id } = req.params;
@@ -1290,7 +1338,7 @@ const requestManagement = { // ====== List requests in admin's scope ======
 
 // NEW: Helper function to check if admin can modify a request
 function
-canAdminModifyRequest(admin, request) {
+    canAdminModifyRequest(admin, request) {
     const adminRole = admin.role;
     const adminRank = RANK[adminRole] || 0;
 
@@ -1322,7 +1370,7 @@ canAdminModifyRequest(admin, request) {
             return false;
     }
 } // ====== Get farmers in admin's scope ======
-exports.listFarmersInScope = async(req, res) => {
+exports.listFarmersInScope = async (req, res) => {
     try {
         const admin = req.user;
         let where = '1=1';
@@ -1384,7 +1432,7 @@ function getRejecterRank(request) {
 // Report Management
 const reportManagement = {
     // Create a report about another admin
-    createReport: async(req, res) => {
+    createReport: async (req, res) => {
         try {
             const reporter = req.user;
             const { reported_admin_id, report_type, title, description, evidence, priority } = req.body;
@@ -1442,7 +1490,7 @@ const reportManagement = {
     },
 
     // Get reports that the current admin can view (reports they made or reports about them)
-    getMyReports: async(req, res) => {
+    getMyReports: async (req, res) => {
         try {
             const admin = req.user;
 
@@ -1475,7 +1523,7 @@ const reportManagement = {
     },
 
     // Higher-level admins can view all reports in their scope
-    getReportsInScope: async(req, res) => {
+    getReportsInScope: async (req, res) => {
         try {
             const admin = req.user;
             let where = '1=1';
@@ -1527,7 +1575,7 @@ const reportManagement = {
     },
 
     // Update report status (for higher-level admins to resolve reports)
-    updateReportStatus: async(req, res) => {
+    updateReportStatus: async (req, res) => {
         try {
             const admin = req.user;
             const { id } = req.params;
@@ -1624,7 +1672,7 @@ const reportManagement = {
     },
 
     // Get report statistics for dashboard
-    getReportStatistics: async(req, res) => {
+    getReportStatistics: async (req, res) => {
         try {
             const admin = req.user;
             let where = '1=1';
